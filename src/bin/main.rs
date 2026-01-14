@@ -32,36 +32,23 @@ esp_bootloader_esp_idf::esp_app_desc!();
 )]
 #[main]
 fn main() -> ! {
-    info!("Starting up 1");
+    info!("Starting up");
     // generator version: 1.2.0
 
-    info!("Starting up 2");
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::_80MHz);
-    info!("Starting up 3");
     let peripherals = esp_hal::init(config);
 
-    info!("Starting up 4");
     esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 73744);
-    info!("Starting up 5");
     // COEX needs more RAM - so we've added some more
     esp_alloc::heap_allocator!(size: 64 * 1024);
 
-    info!("Starting up 6");
     let timg0 = TimerGroup::new(peripherals.TIMG0);
-    info!("Starting up 7");
     esp_rtos::start(timg0.timer0);
-    info!("Starting up 8");
     let radio_init = esp_radio::init().expect("Failed to initialize Wi-Fi/BLE controller");
-    info!("Starting up 9");
     let (mut _wifi_controller, _interfaces) =
         esp_radio::wifi::new(&radio_init, peripherals.WIFI, Default::default())
             .expect("Failed to initialize Wi-Fi controller");
-    info!("Starting up 10");
     let _connector = BleConnector::new(&radio_init, peripherals.BT, Default::default());
-
-    // let rmt = Rmt::new(peripherals.RMT, Rate::from_mhz(80)).unwrap();
-
-    // let io = Io::new(peripherals.IO_MUX);
 
     info!("Setting up I2C");
     let i2c = i2c::master::I2c::new(peripherals.I2C0, i2c::master::Config::default())
@@ -91,16 +78,22 @@ fn main() -> ! {
                         i2c::master::AcknowledgeCheckFailedReason::Unknown => error!("    Unknown"),
                         _ => error!("    ????"),
                     }
-                },
+                }
                 i2c::master::Error::Timeout => error!("  I2C error: Timeout"),
                 i2c::master::Error::ArbitrationLost => error!("  I2C error: ArbitrationLost"),
-                i2c::master::Error::ExecutionIncomplete => error!("  I2C error: ExecutionIncomplete"),
-                i2c::master::Error::CommandNumberExceeded => error!("  I2C error: CommandNumberExceeded"),
+                i2c::master::Error::ExecutionIncomplete => {
+                    error!("  I2C error: ExecutionIncomplete")
+                }
+                i2c::master::Error::CommandNumberExceeded => {
+                    error!("  I2C error: CommandNumberExceeded")
+                }
                 i2c::master::Error::ZeroLengthInvalid => error!("  I2C error: ZeroLengthInvalid"),
-                i2c::master::Error::AddressInvalid(i2c_address) => error!("  I2C error: AddressInvalid: {}", i2c_address),
+                i2c::master::Error::AddressInvalid(i2c_address) => {
+                    error!("  I2C error: AddressInvalid: {}", i2c_address)
+                }
                 _ => todo!(),
             };
-        },
+        }
         bme680::Error::Delay => error!("BME init error: Delay"),
         bme680::Error::DeviceNotFound => error!("BME init error: DeviceNotFound"),
         bme680::Error::InvalidLength => error!("BME init error: InvalidLength"),
@@ -117,13 +110,9 @@ fn main() -> ! {
         .with_humidity_oversampling(bme680::OversamplingSetting::OS2x)
         .with_temperature_filter(IIRFilterSize::Size3)
         .with_gas_measurement(time::Duration::from_millis(1500), 320, 25)
-        .with_temperature_offset(-2.2)
         .with_run_gas(true)
         .build();
 
-    let profile_dur = bme_dev.get_profile_dur(&settings.0).unwrap();
-    info!("Profile duration {:?}", profile_dur);
-    info!("Setting sensor settings");
     bme_dev.set_sensor_settings(&mut delayer, settings).unwrap();
 
     info!("Setting forced power modes");
@@ -131,26 +120,21 @@ fn main() -> ! {
         .set_sensor_mode(&mut delayer, PowerMode::ForcedMode)
         .unwrap();
 
-    // let sensor_settings = bme_dev.get_sensor_settings(settings.1);
-    // info!("Sensor settings: {}", sensor_settings);
-
     loop {
-        let delay_start = Instant::now();
-        while delay_start.elapsed() < Duration::from_millis(500) {}
-
-        // let power_mode = bme_dev.get_sensor_mode();
-        // info!("Sensor power mode: {}", power_mode);
-        info!("Setting forced power modes");
         bme_dev
             .set_sensor_mode(&mut delayer, PowerMode::ForcedMode)
             .unwrap();
-        info!("Retrieving sensor data");
         let (data, _state) = bme_dev.get_sensor_data(&mut delayer).unwrap();
-        // info!("Sensor Data {:?}", data);
-        info!("Temperature {}°C", data.temperature_celsius());
-        info!("Pressure {}hPa", data.pressure_hpa());
-        info!("Humidity {}%", data.humidity_percent());
-        info!("Gas Resistance {}Ω", data.gas_resistance_ohm());
+        info!(
+            "{{ \"temp_c\": {}, \"pressure\": {}, \"humidity\": {}, \"gas_ohm\": {} }}",
+            data.temperature_celsius(),
+            data.pressure_hpa(),
+            data.humidity_percent(),
+            data.gas_resistance_ohm()
+        );
+
+        let delay_start = Instant::now();
+        while delay_start.elapsed() < Duration::from_millis(60_000) {}
     }
     // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v1.0.0/examples
 }
