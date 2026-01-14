@@ -10,6 +10,7 @@
 use core::cell::RefCell;
 use core::time;
 
+use bh1750::BH1750;
 use bme680::{Bme680, I2CAddress, IIRFilterSize, PowerMode, SettingsBuilder};
 use defmt::{error, info};
 use embedded_hal_bus::i2c::RefCellDevice;
@@ -50,7 +51,7 @@ fn main() -> ! {
             .expect("Failed to initialize Wi-Fi controller");
     let _connector = BleConnector::new(&radio_init, peripherals.BT, Default::default());
 
-    info!("Setting up I2C");
+    info!("Setting up I2C for BME680");
     let i2c = i2c::master::I2c::new(peripherals.I2C0, i2c::master::Config::default())
         .unwrap()
         .with_sda(peripherals.GPIO1)
@@ -120,20 +121,48 @@ fn main() -> ! {
         .set_sensor_mode(&mut delayer, PowerMode::ForcedMode)
         .unwrap();
 
+    info!("Setting up I2C for BH1750");
+    let i2c_bh1750 = i2c::master::I2c::new(peripherals.I2C1, i2c::master::Config::default())
+        .unwrap()
+        .with_sda(peripherals.GPIO42)
+        .with_scl(peripherals.GPIO41);
+
+    let mut delayer_bh1750 = esp_hal::delay::Delay::new();
+    let mut bh1750 = BH1750::new(i2c_bh1750, &mut delayer_bh1750, false);
+
+    info!(
+        "Lux measurement time for HIGH2: {} ms",
+        bh1750.get_typical_measurement_time_ms(bh1750::Resolution::High2)
+    );
+    info!(
+        "Lux measurement time for HIGH:  {} ms",
+        bh1750.get_typical_measurement_time_ms(bh1750::Resolution::High)
+    );
+    info!(
+        "Lux measurement time for LOW:    {} ms",
+        bh1750.get_typical_measurement_time_ms(bh1750::Resolution::Low)
+    );
+
     loop {
+        let delay_start = Instant::now();
+
         bme_dev
             .set_sensor_mode(&mut delayer, PowerMode::ForcedMode)
             .unwrap();
         let (data, _state) = bme_dev.get_sensor_data(&mut delayer).unwrap();
+
+        let lux = bh1750
+            .get_one_time_measurement(bh1750::Resolution::High2)
+            .unwrap();
         info!(
-            "{{ \"temp_c\": {}, \"pressure\": {}, \"humidity\": {}, \"gas_ohm\": {} }}",
+            "{{ \"temperature\": {}, \"pressure\": {}, \"humidity\": {}, \"gas_ohm\": {}, \"lux\": {} }}",
             data.temperature_celsius(),
             data.pressure_hpa(),
             data.humidity_percent(),
-            data.gas_resistance_ohm()
+            data.gas_resistance_ohm(),
+            lux,
         );
 
-        let delay_start = Instant::now();
         while delay_start.elapsed() < Duration::from_millis(60_000) {}
     }
     // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v1.0.0/examples

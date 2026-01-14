@@ -27,6 +27,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8"
 
 [[package]]
+name = "bh1750"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eaf0f2134f0b6ac900efff9be5498d1736b8e9cf27369858e34e383da406666d"
+dependencies = [
+ "embedded-hal 1.0.0",
+]
+
+[[package]]
 name = "bitfield"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1520,6 +1529,7 @@ checksum = "828b13930191ed00e8d82485e6d5396a5abd511b9ed1f53b016f77c791fe9769"
 name = "sensors-node"
 version = "0.1.0"
 dependencies = [
+ "bh1750",
  "bleps",
  "bme680",
  "critical-section",
