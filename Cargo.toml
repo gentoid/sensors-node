@@ -62,6 +62,9 @@ bh1750 = "*"
 bme680 = { git = "https://github.com/marcelbuesing/bme680", rev = "838d1eaeb14be76a8d325eafd7e0896299aa9e68" }
 embedded-hal-bus = "0.3.0"
 
+minimq = { version = "0.10.0", features = ["logging"]}
+smoltcp-nal = "0.7.0"
+
 [profile.dev]
 # Rust debug is too slow.
 # For debug builds always builds with some optimization

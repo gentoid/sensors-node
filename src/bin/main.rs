@@ -8,6 +8,7 @@
 #![deny(clippy::large_stack_frames)]
 
 use core::cell::RefCell;
+use core::net::Ipv4Addr;
 use core::time;
 
 use bh1750::BH1750;
@@ -19,7 +20,13 @@ use esp_hal::time::{Duration, Instant};
 use esp_hal::timer::timg::TimerGroup;
 use esp_hal::{i2c, main};
 use esp_radio::ble::controller::BleConnector;
+use minimq::broker::IpBroker;
+use minimq::{ConfigBuilder, embedded_time};
+use minimq::embedded_time::rate::Fraction;
 use sensors_node::air_quality;
+use smoltcp::iface::{SocketSet, SocketStorage};
+use smoltcp::wire::{EthernetAddress, IpAddress};
+use smoltcp_nal::NetworkStack;
 use {esp_backtrace as _, esp_println as _};
 
 extern crate alloc;
@@ -27,6 +34,21 @@ extern crate alloc;
 // This creates a default app-descriptor required by the esp-idf bootloader.
 // For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
 esp_bootloader_esp_idf::esp_app_desc!();
+
+struct EspClock;
+
+impl embedded_time::Clock for EspClock {
+    type T = u32;
+    
+    const SCALING_FACTOR: embedded_time::rate::Fraction = Fraction::new(1, 1);
+    
+    fn try_now(&self) -> Result<embedded_time::Instant<Self>, embedded_time::clock::Error> {
+        Ok(embedded_time::Instant::new(
+            Instant::now().duration_since_epoch().as_secs() as u32
+        ))
+    }
+    
+}
 
 #[allow(
     clippy::large_stack_frames,
@@ -47,10 +69,30 @@ fn main() -> ! {
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     esp_rtos::start(timg0.timer0);
     let radio_init = esp_radio::init().expect("Failed to initialize Wi-Fi/BLE controller");
-    let (mut _wifi_controller, _interfaces) =
+    let (mut _wifi_controller, interfaces) =
         esp_radio::wifi::new(&radio_init, peripherals.WIFI, Default::default())
             .expect("Failed to initialize Wi-Fi controller");
     let _connector = BleConnector::new(&radio_init, peripherals.BT, Default::default());
+
+    info!("Setting up MQTT client");
+    let mut ap = interfaces.ap;
+
+    let iface = smoltcp::iface::Interface::new(
+        smoltcp::iface::Config::new(smoltcp::wire::HardwareAddress::Ethernet(
+            EthernetAddress::from_bytes(&ap.mac_address()),
+        )),
+        &mut ap,
+        smoltcp::time::Instant::from_millis(i64::try_from(Instant::now().duration_since_epoch().as_millis()).unwrap()),
+    );
+
+    static mut SOCKET_STORAGE: [SocketStorage; 8] = [SocketStorage::EMPTY; 8];
+    let sockets = unsafe {SocketSet::new(&mut SOCKET_STORAGE[..])};
+
+    let stack = NetworkStack::new(iface, ap, sockets, EspClock);
+    let broker = IpBroker::new(core::net::IpAddr::V4(Ipv4Addr::new(192, 168, 1, 10)));
+    let mut buffer = [0u8;1024];
+    let config = ConfigBuilder::new(broker, &mut buffer);
+    minimq::Minimq::new(stack, EspClock, config);
 
     info!("Setting up I2C for BME680");
     let i2c = i2c::master::I2c::new(peripherals.I2C0, i2c::master::Config::default())
