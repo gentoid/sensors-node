@@ -84,7 +84,7 @@ pub async fn wait_for_wifi(
             }
             Err(err) => {
                 print_wifi_error(err);
-                return false;
+                // return false;
             }
         }
 

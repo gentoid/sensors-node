@@ -20,7 +20,7 @@ use embedded_hal_bus::i2c::RefCellDevice;
 use esp_hal::clock::CpuClock;
 use esp_hal::i2c;
 use esp_hal::timer::timg::TimerGroup;
-use esp_radio::wifi::{AuthMethod, ClientConfig, WifiDevice};
+use esp_radio::wifi::{ClientConfig, WifiDevice};
 use esp_rtos::main;
 use heapless::Vec;
 use sensors_node::air_quality;
@@ -33,20 +33,6 @@ extern crate alloc;
 // This creates a default app-descriptor required by the esp-idf bootloader.
 // For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
 esp_bootloader_esp_idf::esp_app_desc!();
-
-// struct EspClock;
-
-// impl embedded_time::Clock for EspClock {
-//     type T = u32;
-
-//     const SCALING_FACTOR: embedded_time::rate::Fraction = Fraction::new(1, 1);
-
-//     fn try_now(&self) -> Result<embedded_time::Instant<Self>, embedded_time::clock::Error> {
-//         Ok(embedded_time::Instant::new(
-//             Instant::now().duration_since_epoch().as_secs() as u32,
-//         ))
-//     }
-// }
 
 static RADIO: StaticCell<esp_radio::Controller<'static>> = StaticCell::new();
 static RESOURCES: StaticCell<StackResources<8>> = StaticCell::new();
@@ -70,7 +56,7 @@ async fn main(spawner: Spawner) -> ! {
 
     esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 73744);
     // COEX needs more RAM - so we've added some more
-    esp_alloc::heap_allocator!(size: 64 * 1024);
+    esp_alloc::heap_allocator!(size: 72 * 1024);
 
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     esp_rtos::start(timg0.timer0);
@@ -87,21 +73,13 @@ async fn main(spawner: Spawner) -> ! {
         ClientConfig::default()
             .with_ssid(env!("WIFI_SSID").into())
             .with_password(env!("WIFI_PASSWORD").into())
-            .with_protocols(esp_radio::wifi::Protocol::P802D11BGN.into())
-            .with_auth_method(AuthMethod::Wpa2Wpa3Personal)
-            // .with_channel(1)
-            .with_scan_method(esp_radio::wifi::ScanMethod::AllChannels),
+            .with_failure_retry_cnt(3),
     );
 
     info!("  Setting up WiFi power saving");
     if let Err(err) = wifi_controller.set_power_saving(esp_radio::wifi::PowerSaveMode::None) {
         print_wifi_error(err);
     };
-
-    // info!("  Setting up WiFi mode STA");
-    // if let Err(err) = wifi_controller.set_mode(esp_radio::wifi::WifiMode::Sta) {
-    //     print_wifi_error(err);
-    // };
 
     if let Err(err) = wifi_controller.set_config(&wifi_config) {
         print_wifi_error(err);
@@ -115,13 +93,13 @@ async fn main(spawner: Spawner) -> ! {
     }
 
     let net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
-        address: Ipv4Cidr::from_netmask(
-            Ipv4Addr::from_octets([192, 168, 1, 210]),
-            Ipv4Addr::from_octets([255, 255, 255, 0]),
-        ).unwrap(),
+        address: Ipv4Cidr::new(Ipv4Addr::from_octets([192, 168, 1, 210]), 24),
         dns_servers: Vec::new(),
-        gateway: None
+        gateway: Some(Ipv4Addr::from_octets([192, 168, 1, 1])),
     });
+
+    // let net_config = embassy_net::Config::dhcpv4(Default::default());
+
     let (stack, runner) = embassy_net::new(
         interfaces.sta,
         net_config,
@@ -136,16 +114,21 @@ async fn main(spawner: Spawner) -> ! {
 
     spawner.must_spawn(net_task(runner));
 
+    // wifi_controller.
+
     info!("  Waiting for network...");
-    stack.wait_config_up().await;
+    stack.wait_link_up().await;
+
+    // stack.
 
     info!("Network is up!");
     info!("IP address: {:?}", stack.config_v4());
 
     // let _connector = BleConnector::new(&radio_init, peripherals.BT, Default::default());
 
-    // static mut SOCKET_STORAGE: [SocketStorage; 8] = [SocketStorage::EMPTY; 8];
-    // let mut sockets = unsafe { SocketSet::new(&mut SOCKET_STORAGE[..]) };
+    static mut SOCKET_STORAGE: [smoltcp::iface::SocketStorage; 8] =
+        [smoltcp::iface::SocketStorage::EMPTY; 8];
+    let mut sockets = unsafe { smoltcp::iface::SocketSet::new(&mut SOCKET_STORAGE[..]) };
 
     // let dhcp_socket = dhcpv4::Socket::new();
     // let dhcp_handle = sockets.add(dhcp_socket);
@@ -153,14 +136,14 @@ async fn main(spawner: Spawner) -> ! {
     // let wifi_device = interfaces.sta;
 
     // let iface_config = smoltcp::iface::Config::new(smoltcp::wire::HardwareAddress::Ethernet(
-    //     EthernetAddress::from_bytes(&wifi_device.mac_address()),
+    //     embassy_net::EthernetAddress::from_bytes(&interfaces.sta.mac_address()),
     // ));
 
     // let mut iface = smoltcp::iface::Interface::new(
     //     iface_config,
-    //     &mut wifi_device,
+    //     &mut interfaces.sta,
     //     smoltcp::time::Instant::from_millis(
-    //         i64::try_from(Instant::now().duration_since_epoch().as_millis()).unwrap(),
+    //         i64::try_from(esp_hal::time::Instant::now().duration_since_epoch().as_millis()).unwrap(),
     //     ),
     // );
 
@@ -248,13 +231,15 @@ async fn main(spawner: Spawner) -> ! {
     //     warn!("Error getting WiFi capabilities");
     // }
 
-    // info!("Setting up MQTT client");
+    info!("Setting up MQTT client");
 
-    // let stack = NetworkStack::new(iface, wifi_device, sockets, EspClock);
-    // let broker = IpBroker::new(core::net::IpAddr::V4(Ipv4Addr::new(192, 168, 1, 10)));
-    // let mut buffer = [0u8; 1024];
-    // let config = ConfigBuilder::new(broker, &mut buffer);
-    // minimq::Minimq::new(stack, EspClock, config);
+    // let stack = smoltcp_nal::NetworkStack::new(iface, interfaces.sta, sockets, EspClock);
+    let broker =
+        minimq::broker::IpBroker::new(core::net::IpAddr::V4(Ipv4Addr::new(192, 168, 1, 10)));
+    let mut buffer = [0u8; 1024];
+    let config = minimq::ConfigBuilder::new(broker, &mut buffer);
+    // let stack =
+    // minimq::Minimq::new(stack.into(), EspClock, config);
 
     info!("Setting up I2C for BME680");
     let i2c = i2c::master::I2c::new(peripherals.I2C0, i2c::master::Config::default())
