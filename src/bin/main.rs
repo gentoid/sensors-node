@@ -19,6 +19,7 @@ use esp_hal::time::{Duration, Instant};
 use esp_hal::timer::timg::TimerGroup;
 use esp_hal::{i2c, main};
 use esp_radio::ble::controller::BleConnector;
+use sensors_node::air_quality;
 use {esp_backtrace as _, esp_println as _};
 
 extern crate alloc;
@@ -110,7 +111,7 @@ fn main() -> ! {
         .with_pressure_oversampling(bme680::OversamplingSetting::OS4x)
         .with_humidity_oversampling(bme680::OversamplingSetting::OS2x)
         .with_temperature_filter(IIRFilterSize::Size3)
-        .with_gas_measurement(time::Duration::from_millis(1500), 320, 25)
+        .with_gas_measurement(time::Duration::from_millis(150), 320, 21)
         .with_run_gas(true)
         .build();
 
@@ -154,13 +155,20 @@ fn main() -> ! {
         let lux = bh1750
             .get_one_time_measurement(bh1750::Resolution::High2)
             .unwrap();
+
+        let humidity = data.humidity_percent();
+        let gas = data.gas_resistance_ohm();
+
+        let (aiq_score, aiq) = air_quality::calculate(humidity, gas);
         info!(
-            "{{ \"temperature\": {}, \"pressure\": {}, \"humidity\": {}, \"gas_ohm\": {}, \"lux\": {} }}",
+            "{{ \"temperature\": {}, \"pressure\": {}, \"humidity\": {}, \"gas_ohm\": {}, \"lux\": {}, \"aiq_score\": {}, \"aiq\": \"{}\" }}",
             data.temperature_celsius(),
             data.pressure_hpa(),
-            data.humidity_percent(),
-            data.gas_resistance_ohm(),
+            humidity,
+            gas,
             lux,
+            aiq_score,
+            aiq,
         );
 
         while delay_start.elapsed() < Duration::from_millis(60_000) {}
