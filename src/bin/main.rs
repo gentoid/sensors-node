@@ -114,21 +114,17 @@ async fn main(spawner: Spawner) -> ! {
 
     spawner.must_spawn(net_task(runner));
 
-    // wifi_controller.
-
     info!("  Waiting for network...");
     stack.wait_link_up().await;
 
-    // stack.
-
     info!("Network is up!");
-    info!("IP address: {:?}", stack.config_v4());
+    info!("IPv4 config: {:?}", stack.config_v4());
 
     // let _connector = BleConnector::new(&radio_init, peripherals.BT, Default::default());
 
-    static mut SOCKET_STORAGE: [smoltcp::iface::SocketStorage; 8] =
-        [smoltcp::iface::SocketStorage::EMPTY; 8];
-    let mut sockets = unsafe { smoltcp::iface::SocketSet::new(&mut SOCKET_STORAGE[..]) };
+    // static mut SOCKET_STORAGE: [smoltcp::iface::SocketStorage; 8] =
+    //     [smoltcp::iface::SocketStorage::EMPTY; 8];
+    // let mut sockets = unsafe { smoltcp::iface::SocketSet::new(&mut SOCKET_STORAGE[..]) };
 
     // let dhcp_socket = dhcpv4::Socket::new();
     // let dhcp_handle = sockets.add(dhcp_socket);
@@ -277,7 +273,7 @@ async fn main(spawner: Spawner) -> ! {
             aiq_score,
             aiq,
         );
-        embassy_time::Timer::after(embassy_time::Duration::from_secs(10)).await;
+        embassy_time::Timer::after(embassy_time::Duration::from_secs(60)).await;
         // while delay_start.elapsed() < Duration::from_millis(60_000) {}
     }
     // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/esp-hal-v1.0.0/examples
