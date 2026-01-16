@@ -79,6 +79,7 @@ embedded-hal-bus = "0.3.0"
 smoltcp-nal = "0.7.0"
 # embassy-executor = "0.9.1"
 rust-mqtt = { version = "*", features = ["v5", "defmt"] }
+embassy-sync = { version = "0.7.2", features = ["defmt"] }
 
 [profile.dev]
 # Rust debug is too slow.

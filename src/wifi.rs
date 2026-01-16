@@ -1,12 +1,10 @@
 use defmt::{error, info, warn};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
 use embassy_time::Timer;
 use esp_radio::wifi::{ClientConfig, PowerSaveMode, WifiError};
 
-pub enum State {
-    Disconnected,
-    Connecting,
-    Connected,
-}
+pub static UP: Signal<CriticalSectionRawMutex, ()> = Signal::new();
+pub static DOWN: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 
 #[embassy_executor::task]
 pub async fn wifi_task(mut wifi: esp_radio::wifi::WifiController<'static>) -> ! {
@@ -16,6 +14,7 @@ pub async fn wifi_task(mut wifi: esp_radio::wifi::WifiController<'static>) -> ! 
 
     loop {
         if wifi.is_connected().ok().unwrap_or_default() {
+            UP.signal(());
             backoff = 1;
             Timer::after_secs(5).await;
             continue;
@@ -25,6 +24,7 @@ pub async fn wifi_task(mut wifi: esp_radio::wifi::WifiController<'static>) -> ! 
         match wifi.connect_async().await {
             Ok(_) => {
                 info!("WiFI: connected");
+                UP.signal(());
                 backoff = 1;
             }
             Err(err) => {
