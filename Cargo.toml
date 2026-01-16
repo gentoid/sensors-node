@@ -27,8 +27,8 @@ embassy-net = { version = "0.8.0", features = [
   "tcp",
   "udp",
 ] }
-static_cell      = "2.1.1"
-heapless = "*"
+static_cell = "2.1.1"
+heapless = { version = "0.8.0" }
 
 defmt = "1.0.1"
 esp-bootloader-esp-idf = { version = "0.4.0", features = ["defmt", "esp32s3"] }
@@ -75,9 +75,10 @@ bh1750 = "*"
 bme680 = { git = "https://github.com/marcelbuesing/bme680", rev = "838d1eaeb14be76a8d325eafd7e0896299aa9e68" }
 embedded-hal-bus = "0.3.0"
 
-minimq = { version = "0.10.0", features = ["logging"]}
+# minimq = { version = "0.10.0", features = ["logging"]}
 smoltcp-nal = "0.7.0"
 # embassy-executor = "0.9.1"
+rust-mqtt = { version = "*", features = ["v5", "defmt"] }
 
 [profile.dev]
 # Rust debug is too slow.

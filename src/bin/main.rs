@@ -13,9 +13,9 @@ use core::{cell::RefCell, net::Ipv4Addr};
 
 use bh1750::BH1750;
 use bme680::{Bme680, I2CAddress, IIRFilterSize, PowerMode, SettingsBuilder};
-use defmt::{error, info};
+use defmt::{error, info, warn};
 use embassy_executor::Spawner;
-use embassy_net::{Ipv4Cidr, StackResources, StaticConfigV4};
+use embassy_net::{Ipv4Cidr, StackResources, StaticConfigV4, tcp};
 use embedded_hal_bus::i2c::RefCellDevice;
 use esp_hal::clock::CpuClock;
 use esp_hal::i2c;
@@ -23,6 +23,10 @@ use esp_hal::timer::timg::TimerGroup;
 use esp_radio::wifi::{ClientConfig, WifiDevice};
 use esp_rtos::main;
 use heapless::Vec;
+use rust_mqtt::buffer::AllocBuffer;
+use rust_mqtt::client::options::ConnectOptions;
+use rust_mqtt::config::SessionExpiryInterval;
+use rust_mqtt::types::MqttString;
 use sensors_node::air_quality;
 use sensors_node::wifi::print_wifi_error;
 use static_cell::StaticCell;
@@ -94,7 +98,7 @@ async fn main(spawner: Spawner) -> ! {
 
     let net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(Ipv4Addr::from_octets([192, 168, 1, 210]), 24),
-        dns_servers: Vec::new(),
+        dns_servers: Vec::from_slice(&[Ipv4Addr::from_octets([192, 168, 1, 1])]).unwrap(),
         gateway: Some(Ipv4Addr::from_octets([192, 168, 1, 1])),
     });
 
@@ -122,36 +126,48 @@ async fn main(spawner: Spawner) -> ! {
 
     // let _connector = BleConnector::new(&radio_init, peripherals.BT, Default::default());
 
-    // static mut SOCKET_STORAGE: [smoltcp::iface::SocketStorage; 8] =
-    //     [smoltcp::iface::SocketStorage::EMPTY; 8];
-    // let mut sockets = unsafe { smoltcp::iface::SocketSet::new(&mut SOCKET_STORAGE[..]) };
-
-    // let dhcp_socket = dhcpv4::Socket::new();
-    // let dhcp_handle = sockets.add(dhcp_socket);
-
-    // let wifi_device = interfaces.sta;
-
-    // let iface_config = smoltcp::iface::Config::new(smoltcp::wire::HardwareAddress::Ethernet(
-    //     embassy_net::EthernetAddress::from_bytes(&interfaces.sta.mac_address()),
-    // ));
-
-    // let mut iface = smoltcp::iface::Interface::new(
-    //     iface_config,
-    //     &mut interfaces.sta,
-    //     smoltcp::time::Instant::from_millis(
-    //         i64::try_from(esp_hal::time::Instant::now().duration_since_epoch().as_millis()).unwrap(),
-    //     ),
-    // );
-
     info!("Setting up MQTT client");
 
-    // let stack = smoltcp_nal::NetworkStack::new(iface, interfaces.sta, sockets, EspClock);
-    let broker =
-        minimq::broker::IpBroker::new(core::net::IpAddr::V4(Ipv4Addr::new(192, 168, 1, 10)));
-    let mut buffer = [0u8; 1024];
-    let config = minimq::ConfigBuilder::new(broker, &mut buffer);
-    // let stack =
-    // minimq::Minimq::new(stack.into(), EspClock, config);
+    let broker_addr = smoltcp::wire::IpAddress::v4(192, 168, 1, 11);
+    let broker_port = 1883;
+
+    let mut rx_buf = [0u8; 1024];
+    let mut tx_buf = [0u8; 1024];
+    let mut tcp_socket = tcp::TcpSocket::new(stack, &mut rx_buf, &mut tx_buf);
+
+    tcp_socket.set_timeout(Some(embassy_time::Duration::from_secs(5)));
+
+    match tcp_socket.connect((broker_addr, broker_port)).await {
+        Ok(_) => {
+            info!("Connected to MQTT by IP/TCP");
+        }
+        Err(err) => warn!("Error connecting IP/TCP: {}", err),
+    }
+
+    let mut buffer = AllocBuffer;
+    let mut mqtt_client: rust_mqtt::client::Client<'_, tcp::TcpSocket<'_>, AllocBuffer, 4, 4, 4> =
+        rust_mqtt::client::Client::new(&mut buffer);
+
+    let options = ConnectOptions {
+        clean_start: true,
+        keep_alive: rust_mqtt::config::KeepAlive::Seconds(30),
+        password: None,
+        session_expiry_interval: SessionExpiryInterval::default(),
+        user_name: None,
+        will: None,
+    };
+
+    match mqtt_client
+        .connect(
+            tcp_socket,
+            &options,
+            Some(MqttString::from_slice("esp32s3-test").unwrap()),
+        )
+        .await
+    {
+        Ok(info) => info!("MQTT Connected: {}", info),
+        Err(err) => warn!("Error connecting to MQT broker: {}", err),
+    }
 
     info!("Setting up I2C for BME680");
     let i2c = i2c::master::I2c::new(peripherals.I2C0, i2c::master::Config::default())
