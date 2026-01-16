@@ -108,8 +108,10 @@ pub async fn sensors_task(
         bh1750.get_typical_measurement_time_ms(bh1750::Resolution::Low)
     );
 
+    let mut skip: u8 = 5;
+
     loop {
-        // let delay_start = Instant::now();
+        let start = embassy_time::Instant::now();
 
         bme_dev
             .set_sensor_mode(&mut delayer, PowerMode::ForcedMode)
@@ -119,6 +121,12 @@ pub async fn sensors_task(
         let lux = bh1750
             .get_one_time_measurement(bh1750::Resolution::High2)
             .unwrap();
+
+        if skip > 0 {
+            skip -= 1;
+            embassy_time::Timer::after(embassy_time::Duration::from_secs(1)).await;
+            continue;
+        }
 
         let humidity = data.humidity_percent();
         let gas_ohm = data.gas_resistance_ohm();
@@ -150,6 +158,8 @@ pub async fn sensors_task(
         }
         HAS_DATA.signal(());
 
-        embassy_time::Timer::after(embassy_time::Duration::from_secs(60)).await;
+        let delay = embassy_time::Duration::from_secs(60) - (embassy_time::Instant::now() - start);
+
+        embassy_time::Timer::after(delay).await;
     }
 }
