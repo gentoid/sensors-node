@@ -108,7 +108,7 @@ pub async fn sensors_task(
         bh1750.get_typical_measurement_time_ms(bh1750::Resolution::Low)
     );
 
-    let mut skip: u8 = 5;
+    let mut skip: u8 = 10;
 
     loop {
         let start = embassy_time::Instant::now();
@@ -124,7 +124,8 @@ pub async fn sensors_task(
 
         if skip > 0 {
             skip -= 1;
-            embassy_time::Timer::after(embassy_time::Duration::from_secs(1)).await;
+            info!("Skip measurement. {} more to skip", skip);
+            embassy_time::Timer::after(embassy_time::Duration::from_secs(3)).await;
             continue;
         }
 
