@@ -1,9 +1,68 @@
-use defmt::{error, info};
-use embassy_time::{Duration, Timer};
-use esp_radio::wifi::{WifiController, WifiError};
-use smoltcp::iface::Interface;
+use defmt::{error, info, warn};
+use embassy_time::Timer;
+use esp_radio::wifi::{ClientConfig, PowerSaveMode, WifiError};
 
-pub fn print_wifi_error(err: WifiError) {
+pub enum State {
+    Disconnected,
+    Connecting,
+    Connected,
+}
+
+#[embassy_executor::task]
+pub async fn wifi_task(mut wifi: esp_radio::wifi::WifiController<'static>) -> ! {
+    setup(&mut wifi).await;
+
+    let mut backoff = 1u64;
+
+    loop {
+        if wifi.is_connected().ok().unwrap_or_default() {
+            backoff = 1;
+            Timer::after_secs(5).await;
+            continue;
+        }
+
+        info!("WiFi: connecting...");
+        match wifi.connect_async().await {
+            Ok(_) => {
+                info!("WiFI: connected");
+                backoff = 1;
+            }
+            Err(err) => {
+                warn!("WiFi error: {:?}", err);
+                Timer::after_secs(backoff).await;
+                backoff = (backoff * 2).min(30);
+            }
+        }
+    }
+}
+
+async fn setup(wifi: &mut esp_radio::wifi::WifiController<'static>) {
+    info!("Setting up WiFi");
+    let wifi_config = esp_radio::wifi::ModeConfig::Client(
+        ClientConfig::default()
+            .with_ssid(env!("WIFI_SSID").into())
+            .with_password(env!("WIFI_PASSWORD").into())
+            .with_failure_retry_cnt(3),
+    );
+
+    info!("  Setting up WiFi power saving");
+    if let Err(err) = wifi.set_power_saving(PowerSaveMode::None) {
+        print_wifi_error(err);
+    };
+
+    if let Err(err) = wifi.set_config(&wifi_config) {
+        print_wifi_error(err);
+    };
+
+    info!("  Starting up the WiFi controller");
+    if let Err(err) = wifi.start_async().await {
+        print_wifi_error(err);
+    } else {
+        info!("  Started: {}", wifi.is_started().ok());
+    }
+}
+
+fn print_wifi_error(err: WifiError) {
     match err {
         esp_radio::wifi::WifiError::NotInitialized => {
             error!("WiFi error: NotInitialized")

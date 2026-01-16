@@ -20,7 +20,7 @@ use embedded_hal_bus::i2c::RefCellDevice;
 use esp_hal::clock::CpuClock;
 use esp_hal::i2c;
 use esp_hal::timer::timg::TimerGroup;
-use esp_radio::wifi::{ClientConfig, WifiDevice};
+use esp_radio::wifi::WifiDevice;
 use esp_rtos::main;
 use heapless::Vec;
 use rust_mqtt::buffer::AllocBuffer;
@@ -28,7 +28,7 @@ use rust_mqtt::client::options::ConnectOptions;
 use rust_mqtt::config::SessionExpiryInterval;
 use rust_mqtt::types::MqttString;
 use sensors_node::air_quality;
-use sensors_node::wifi::print_wifi_error;
+use sensors_node::wifi::wifi_task;
 use static_cell::StaticCell;
 use {esp_backtrace as _, esp_println as _};
 
@@ -68,33 +68,11 @@ async fn main(spawner: Spawner) -> ! {
     let radio_init =
         RADIO.init(esp_radio::init().expect("Failed to initialize Wi-Fi/BLE controller"));
 
-    let (mut wifi_controller, interfaces) =
+    let (wifi_controller, interfaces) =
         esp_radio::wifi::new(radio_init, peripherals.WIFI, Default::default())
             .expect("Failed to initialize Wi-Fi controller");
 
-    info!("Setting up WiFi");
-    let wifi_config = esp_radio::wifi::ModeConfig::Client(
-        ClientConfig::default()
-            .with_ssid(env!("WIFI_SSID").into())
-            .with_password(env!("WIFI_PASSWORD").into())
-            .with_failure_retry_cnt(3),
-    );
-
-    info!("  Setting up WiFi power saving");
-    if let Err(err) = wifi_controller.set_power_saving(esp_radio::wifi::PowerSaveMode::None) {
-        print_wifi_error(err);
-    };
-
-    if let Err(err) = wifi_controller.set_config(&wifi_config) {
-        print_wifi_error(err);
-    };
-
-    info!("  Starting up the WiFi controller");
-    if let Err(err) = wifi_controller.start_async().await {
-        print_wifi_error(err);
-    } else {
-        info!("  Started: {}", wifi_controller.is_started().ok());
-    }
+    spawner.must_spawn(wifi_task(wifi_controller));
 
     let net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(Ipv4Addr::from_octets([192, 168, 1, 210]), 24),
@@ -110,11 +88,6 @@ async fn main(spawner: Spawner) -> ! {
         RESOURCES.init(StackResources::new()),
         embassy_time::Instant::now().as_millis(),
     );
-
-    info!("Connecting to a WiFi network");
-    if let Err(err) = wifi_controller.connect_async().await {
-        print_wifi_error(err);
-    }
 
     spawner.must_spawn(net_task(runner));
 
