@@ -3,18 +3,33 @@ use core::cell::RefCell;
 use bh1750::BH1750;
 use bme680::{Bme680, I2CAddress, IIRFilterSize, PowerMode, SettingsBuilder};
 use defmt::{error, info};
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex, signal::Signal};
 use embedded_hal_bus::i2c::RefCellDevice;
-use esp_hal::{Blocking, i2c::{self, master::I2c}};
+use esp_hal::{
+    Blocking,
+    i2c::{self, master::I2c},
+};
+use heapless::spsc::Queue;
 
 use crate::air_quality;
 
-
 pub static HAS_DATA: Signal<CriticalSectionRawMutex, ()> = Signal::new();
+pub static QUEUE: Mutex<CriticalSectionRawMutex, Queue<Sample, 64>> = Mutex::new(Queue::new());
+
+pub struct Sample {
+    pub temperature: f32,
+    pub pressure: f32,
+    pub humidity: f32,
+    pub gas_ohm: u32,
+    pub lux: f32,
+    pub aiq_score: u32,
+}
 
 #[embassy_executor::task]
-pub async fn sensors_task(i2c: RefCell<I2c<'static, Blocking>>, i2c_bh1750: I2c<'static, Blocking>) -> ! {
-    
+pub async fn sensors_task(
+    i2c: RefCell<I2c<'static, Blocking>>,
+    i2c_bh1750: I2c<'static, Blocking>,
+) -> ! {
     info!("Setting up BME680");
     let mut delayer = esp_hal::delay::Delay::new();
     let mut bme_dev = Bme680::init(
@@ -106,23 +121,35 @@ pub async fn sensors_task(i2c: RefCell<I2c<'static, Blocking>>, i2c_bh1750: I2c<
             .unwrap();
 
         let humidity = data.humidity_percent();
-        let gas = data.gas_resistance_ohm();
+        let gas_ohm = data.gas_resistance_ohm();
 
-        let (aiq_score, aiq) = air_quality::calculate(humidity, gas);
+        let (aiq_score, aiq) = air_quality::calculate(humidity, gas_ohm);
+
+        let sample = Sample {
+            aiq_score,
+            gas_ohm,
+            humidity,
+            lux,
+            pressure: data.pressure_hpa(),
+            temperature: data.temperature_celsius(),
+        };
         info!(
             "{{ \"temperature\": {}, \"pressure\": {}, \"humidity\": {}, \"gas_ohm\": {}, \"lux\": {}, \"aiq_score\": {}, \"aiq\": \"{}\" }}",
-            data.temperature_celsius(),
-            data.pressure_hpa(),
-            humidity,
-            gas,
-            lux,
-            aiq_score,
+            sample.temperature,
+            sample.pressure,
+            sample.humidity,
+            sample.gas_ohm,
+            sample.lux,
+            sample.aiq_score,
             aiq,
         );
-        
+
+        {
+            let mut queue = QUEUE.lock().await;
+            queue.enqueue(sample).ok();
+        }
         HAS_DATA.signal(());
 
         embassy_time::Timer::after(embassy_time::Duration::from_secs(60)).await;
-        // while delay_start.elapsed() < Duration::from_millis(60_000) {}
     }
 }

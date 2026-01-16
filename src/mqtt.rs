@@ -1,15 +1,18 @@
+use core::fmt::Write;
 use defmt::{info, warn};
 use embassy_net::{Stack, tcp};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
 use embassy_time::Timer;
+use heapless::String;
 use rust_mqtt::{
+    Bytes,
     buffer::AllocBuffer,
     client::{
         Client,
-        options::{ConnectOptions, DisconnectOptions},
+        options::{ConnectOptions, DisconnectOptions, PublicationOptions},
     },
     config::SessionExpiryInterval,
-    types::MqttString,
+    types::{MqttString, QoS, TopicName},
 };
 
 use crate::{sensors, wifi};
@@ -72,16 +75,50 @@ pub async fn mqtt_task(stack: Stack<'static>) -> ! {
                 READY.signal(());
                 backoff = 1;
 
-                Timer::after_secs(5).await;
+                let sample = {
+                    let mut queue = sensors::QUEUE.lock().await;
+                    queue.dequeue()
+                };
 
-                mqtt_client.disconnect(&DisconnectOptions {
-                    publish_will: true,
-                    session_expiry_interval: None,
-                }).await.ok();
+                if let Some(sample) = sample {
+                    let mut data = String::<256>::new();
+                    write!(
+                        data,
+                        "{{ \"temperature\": {}, \"pressure\": {}, \"humidity\": {}, \"gas_ohm\": {}, \"lux\": {}, \"aiq_score\": {} }}",
+                        sample.temperature,
+                        sample.pressure,
+                        sample.humidity,
+                        sample.gas_ohm,
+                        sample.lux,
+                        sample.aiq_score,
+                    ).ok();
+                    mqtt_client
+                        .publish(
+                            &PublicationOptions {
+                                qos: QoS::AtLeastOnce,
+                                retain: true,
+                                topic: unsafe {
+                                    TopicName::new_unchecked(MqttString::from_slice_unchecked(
+                                        "sensors/living_room",
+                                    ))
+                                },
+                            },
+                            Bytes::Borrowed(&data.as_bytes()),
+                        )
+                        .await
+                        .ok();
+                    info!("MQTT: data published");
+                };
+
+                mqtt_client
+                    .disconnect(&DisconnectOptions {
+                        publish_will: true,
+                        session_expiry_interval: None,
+                    })
+                    .await
+                    .ok();
 
                 info!("MQTT: disconnected");
-
-                // mqtt_client.publish(options, message)
             }
             Err(err) => {
                 warn!("Could not connect to MQTT: {}", err);
