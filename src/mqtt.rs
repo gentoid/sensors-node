@@ -99,7 +99,7 @@ pub async fn mqtt_task(stack: Stack<'static>) -> ! {
                                 retain: true,
                                 topic: unsafe {
                                     TopicName::new_unchecked(MqttString::from_slice_unchecked(
-                                        "sensors/living_room",
+                                        "sensors/living_room/esp-01/all",
                                     ))
                                 },
                             },
