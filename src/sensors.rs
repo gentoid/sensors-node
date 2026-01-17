@@ -14,7 +14,7 @@ use heapless::spsc::Queue;
 use crate::{air_quality, net_time};
 
 pub static HAS_DATA: Signal<CriticalSectionRawMutex, ()> = Signal::new();
-pub static QUEUE: Mutex<CriticalSectionRawMutex, Queue<Sample, 32>> = Mutex::new(Queue::new());
+pub static QUEUE: Mutex<CriticalSectionRawMutex, Queue<Sample, 64>> = Mutex::new(Queue::new());
 
 pub struct Sample {
     pub timestamp: u32,
