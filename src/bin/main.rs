@@ -19,6 +19,7 @@ use esp_hal::i2c;
 use esp_hal::timer::timg::TimerGroup;
 use esp_radio::wifi::WifiDevice;
 use esp_rtos::main;
+use sensors_node::net_time;
 use static_cell::StaticCell;
 use {esp_backtrace as _, esp_println as _};
 
@@ -82,6 +83,8 @@ async fn main(spawner: Spawner) -> ! {
     info!("Waiting for DHCP...");
     stack.wait_config_up().await;
     info!("IPv4 config: {:?}", stack.config_v4());
+    
+    spawner.must_spawn(net_time::sync_task(stack));
 
     spawner.must_spawn(sensors_node::mqtt::task(stack));
 
