@@ -8,18 +8,17 @@
 #![deny(clippy::large_stack_frames)]
 #![feature(ip_from)]
 
-use core::{cell::RefCell, net::Ipv4Addr};
+use core::cell::RefCell;
 
 use defmt::info;
 use embassy_executor::Spawner;
-use embassy_net::{Ipv4Cidr, StackResources, StaticConfigV4};
+use embassy_net::StackResources;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use esp_hal::clock::CpuClock;
 use esp_hal::i2c;
 use esp_hal::timer::timg::TimerGroup;
 use esp_radio::wifi::WifiDevice;
 use esp_rtos::main;
-use heapless::Vec;
 use sensors_node::mqtt::mqtt_task;
 use sensors_node::sensors::sensors_task;
 use sensors_node::wifi::wifi_task;
@@ -68,13 +67,7 @@ async fn main(spawner: Spawner) -> ! {
 
     spawner.must_spawn(wifi_task(wifi_controller));
 
-    let net_config = embassy_net::Config::ipv4_static(StaticConfigV4 {
-        address: Ipv4Cidr::new(Ipv4Addr::from_octets([192, 168, 1, 210]), 24),
-        dns_servers: Vec::from_slice(&[Ipv4Addr::from_octets([192, 168, 1, 1])]).unwrap(),
-        gateway: Some(Ipv4Addr::from_octets([192, 168, 1, 1])),
-    });
-
-    // let net_config = embassy_net::Config::dhcpv4(Default::default());
+    let net_config = embassy_net::Config::dhcpv4(Default::default());
 
     let (stack, runner) = embassy_net::new(
         interfaces.sta,
@@ -87,8 +80,10 @@ async fn main(spawner: Spawner) -> ! {
 
     info!("  Waiting for network...");
     stack.wait_link_up().await;
+    info!("Link is up!");
 
-    info!("Network is up!");
+    info!("Waiting for DHCP...");
+    stack.wait_config_up().await;
     info!("IPv4 config: {:?}", stack.config_v4());
 
     spawner.must_spawn(mqtt_task(stack));
