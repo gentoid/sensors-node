@@ -7,7 +7,7 @@ pub static UP: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 pub static DOWN: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 
 #[embassy_executor::task]
-pub async fn wifi_task(mut wifi: esp_radio::wifi::WifiController<'static>) -> ! {
+pub async fn task(mut wifi: esp_radio::wifi::WifiController<'static>) -> ! {
     setup(&mut wifi).await;
 
     let mut backoff = 1u64;

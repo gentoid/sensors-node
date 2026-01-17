@@ -19,9 +19,6 @@ use esp_hal::i2c;
 use esp_hal::timer::timg::TimerGroup;
 use esp_radio::wifi::WifiDevice;
 use esp_rtos::main;
-use sensors_node::mqtt::mqtt_task;
-use sensors_node::sensors::sensors_task;
-use sensors_node::wifi::wifi_task;
 use static_cell::StaticCell;
 use {esp_backtrace as _, esp_println as _};
 
@@ -65,7 +62,7 @@ async fn main(spawner: Spawner) -> ! {
         esp_radio::wifi::new(radio_init, peripherals.WIFI, Default::default())
             .expect("Failed to initialize Wi-Fi controller");
 
-    spawner.must_spawn(wifi_task(wifi_controller));
+    spawner.must_spawn(sensors_node::wifi::task(wifi_controller));
 
     let net_config = embassy_net::Config::dhcpv4(Default::default());
 
@@ -86,7 +83,7 @@ async fn main(spawner: Spawner) -> ! {
     stack.wait_config_up().await;
     info!("IPv4 config: {:?}", stack.config_v4());
 
-    spawner.must_spawn(mqtt_task(stack));
+    spawner.must_spawn(sensors_node::mqtt::task(stack));
 
     // let _connector = BleConnector::new(&radio_init, peripherals.BT, Default::default());
 
@@ -104,7 +101,7 @@ async fn main(spawner: Spawner) -> ! {
         .with_sda(peripherals.GPIO42)
         .with_scl(peripherals.GPIO41);
 
-    spawner.must_spawn(sensors_task(i2c_bme680, i2c_bh1750));
+    spawner.must_spawn(sensors_node::sensors::task(i2c_bme680, i2c_bh1750));
 
     loop {
         let forever = embassy_sync::signal::Signal::<NoopRawMutex, ()>::new();

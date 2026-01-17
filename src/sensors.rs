@@ -26,7 +26,7 @@ pub struct Sample {
 }
 
 #[embassy_executor::task]
-pub async fn sensors_task(
+pub async fn task(
     i2c_bme680: RefCell<I2c<'static, Blocking>>,
     i2c_bh1750: I2c<'static, Blocking>,
 ) -> ! {

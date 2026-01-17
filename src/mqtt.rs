@@ -21,7 +21,7 @@ pub static READY: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 pub static DOWN: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 
 #[embassy_executor::task]
-pub async fn mqtt_task(stack: Stack<'static>) -> ! {
+pub async fn task(stack: Stack<'static>) -> ! {
     info!("Setting up MQTT client");
 
     let broker_addr = smoltcp::wire::IpAddress::v4(192, 168, 1, 11);
