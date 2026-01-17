@@ -98,12 +98,12 @@ async fn main(spawner: Spawner) -> ! {
     info!("Setting up MQTT client");
 
     info!("Setting up I2C for BME680");
-    let i2c = i2c::master::I2c::new(peripherals.I2C0, i2c::master::Config::default())
+    let i2c_bme680 = i2c::master::I2c::new(peripherals.I2C0, i2c::master::Config::default())
         .unwrap()
         .with_sda(peripherals.GPIO1)
         .with_scl(peripherals.GPIO2);
 
-    let i2c = RefCell::new(i2c);
+    let i2c_bme680 = RefCell::new(i2c_bme680);
 
     info!("Setting up I2C for BH1750");
     let i2c_bh1750 = i2c::master::I2c::new(peripherals.I2C1, i2c::master::Config::default())
@@ -111,7 +111,7 @@ async fn main(spawner: Spawner) -> ! {
         .with_sda(peripherals.GPIO42)
         .with_scl(peripherals.GPIO41);
 
-    spawner.must_spawn(sensors_task(i2c, i2c_bh1750));
+    spawner.must_spawn(sensors_task(i2c_bme680, i2c_bh1750));
 
     loop {
         let forever = embassy_sync::signal::Signal::<NoopRawMutex, ()>::new();

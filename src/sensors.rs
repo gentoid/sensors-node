@@ -27,13 +27,13 @@ pub struct Sample {
 
 #[embassy_executor::task]
 pub async fn sensors_task(
-    i2c: RefCell<I2c<'static, Blocking>>,
+    i2c_bme680: RefCell<I2c<'static, Blocking>>,
     i2c_bh1750: I2c<'static, Blocking>,
 ) -> ! {
     info!("Setting up BME680");
     let mut delayer = esp_hal::delay::Delay::new();
     let mut bme_dev = Bme680::init(
-        RefCellDevice::new(&i2c),
+        RefCellDevice::new(&i2c_bme680),
         &mut delayer,
         I2CAddress::Primary, /* 0x76 */
     )
