@@ -90,8 +90,6 @@ async fn main(spawner: Spawner) -> ! {
 
     // let _connector = BleConnector::new(&radio_init, peripherals.BT, Default::default());
 
-    info!("Setting up MQTT client");
-
     info!("Setting up I2C for BME680");
     let i2c_bme680 = i2c::master::I2c::new(peripherals.I2C0, i2c::master::Config::default())
         .unwrap()
