@@ -6,6 +6,7 @@ use core::{
 use defmt::{info, warn};
 use embassy_net::{IpAddress, IpEndpoint, udp::PacketMetadata};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex};
+use embassy_time::Instant;
 
 pub static TIME_STATE: Mutex<CriticalSectionRawMutex, TimeState> = Mutex::new(TimeState::new());
 
@@ -23,7 +24,7 @@ impl TimeState {
     }
 
     pub fn set(&self, unix: u32) {
-        let uptime = embassy_time::Instant::now().as_secs() as u32;
+        let uptime = Instant::now().as_secs() as u32;
         self.unit_at_sync.store(unix, Ordering::Relaxed);
         self.uptime_at_sync.store(uptime, Ordering::Relaxed);
     }
@@ -36,9 +37,13 @@ impl TimeState {
         }
 
         let uptime_base = self.uptime_at_sync.load(Ordering::Relaxed);
-        let uptime_now = embassy_time::Instant::now().as_secs() as u32;
+        let uptime_now = Instant::now().as_secs() as u32;
 
         Some(base + uptime_now - uptime_base)
+    }
+
+    pub fn now_or_uptime(&self) -> u32 {
+        self.now().unwrap_or_else(|| Instant::now().as_secs() as u32)
     }
 }
 

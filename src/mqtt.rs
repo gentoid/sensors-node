@@ -16,7 +16,7 @@ use rust_mqtt::{
     types::{MqttString, QoS, TopicName},
 };
 
-use crate::{net_time, sensors, wifi};
+use crate::{sensors, wifi};
 
 pub static READY: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 pub static DOWN: Signal<CriticalSectionRawMutex, ()> = Signal::new();
@@ -115,12 +115,10 @@ pub async fn task(stack: Stack<'static>) -> ! {
                 if let Some(sample) = sample {
                     let mut payload = String::<256>::new();
 
-                    let ts = { net_time::TIME_STATE.lock().await.now().unwrap_or(0) };
-
                     write!(
                         payload,
                         "{{ \"ts\": {}, \"temperature\": {}, \"pressure\": {}, \"humidity\": {}, \"gas_ohm\": {}, \"lux\": {}, \"aiq_score\": {} }}",
-                        ts,
+                        sample.timestamp,
                         sample.temperature,
                         sample.pressure,
                         sample.humidity,

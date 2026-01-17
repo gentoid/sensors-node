@@ -11,12 +11,13 @@ use esp_hal::{
 };
 use heapless::spsc::Queue;
 
-use crate::air_quality;
+use crate::{air_quality, net_time};
 
 pub static HAS_DATA: Signal<CriticalSectionRawMutex, ()> = Signal::new();
-pub static QUEUE: Mutex<CriticalSectionRawMutex, Queue<Sample, 64>> = Mutex::new(Queue::new());
+pub static QUEUE: Mutex<CriticalSectionRawMutex, Queue<Sample, 32>> = Mutex::new(Queue::new());
 
 pub struct Sample {
+    pub timestamp: u32,
     pub temperature: f32,
     pub pressure: f32,
     pub humidity: f32,
@@ -129,12 +130,14 @@ pub async fn task(
             continue;
         }
 
-        let humidity = data.humidity_percent();
+        let humidity = data.humidity_percent(); 
+        let timestamp = { net_time::TIME_STATE.lock().await.now_or_uptime() };
         let gas_ohm = data.gas_resistance_ohm();
 
         let (aiq_score, aiq) = air_quality::calculate(humidity, gas_ohm);
 
         let sample = Sample {
+            timestamp,
             aiq_score,
             gas_ohm,
             humidity,
@@ -143,7 +146,8 @@ pub async fn task(
             temperature: data.temperature_celsius(),
         };
         info!(
-            "{{ \"temperature\": {}, \"pressure\": {}, \"humidity\": {}, \"gas_ohm\": {}, \"lux\": {}, \"aiq_score\": {}, \"aiq\": \"{}\" }}",
+            "{{ \"ts\": {}, \"temperature\": {}, \"pressure\": {}, \"humidity\": {}, \"gas_ohm\": {}, \"lux\": {}, \"aiq_score\": {}, \"aiq\": \"{}\" }}",
+            sample.timestamp,
             sample.temperature,
             sample.pressure,
             sample.humidity,
