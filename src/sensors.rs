@@ -4,6 +4,7 @@ use bh1750::BH1750;
 use bme680::{Bme680, I2CAddress, IIRFilterSize, PowerMode, SettingsBuilder};
 use defmt::{error, info};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex, signal::Signal};
+use embassy_time::{Instant, Timer};
 use embedded_hal_bus::i2c::RefCellDevice;
 use esp_hal::{
     Blocking,
@@ -112,7 +113,7 @@ pub async fn task(
     let mut skip: u8 = 10;
 
     loop {
-        let start = embassy_time::Instant::now();
+        let start = Instant::now();
 
         bme_dev
             .set_sensor_mode(&mut delayer, PowerMode::ForcedMode)
@@ -126,7 +127,7 @@ pub async fn task(
         if skip > 0 {
             skip -= 1;
             info!("Skip measurement. {} more to skip", skip);
-            embassy_time::Timer::after(embassy_time::Duration::from_secs(3)).await;
+            Timer::after(embassy_time::Duration::from_secs(3)).await;
             continue;
         }
 
@@ -163,8 +164,8 @@ pub async fn task(
         }
         HAS_DATA.signal(());
 
-        let delay = embassy_time::Duration::from_secs(60) - (embassy_time::Instant::now() - start);
+        let delay = embassy_time::Duration::from_secs(60) - (Instant::now() - start);
 
-        embassy_time::Timer::after(delay).await;
+        Timer::after(delay).await;
     }
 }
