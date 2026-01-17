@@ -85,9 +85,7 @@ pub async fn task(stack: Stack<'static>) -> ! {
 
         loop {
             match select3(sensors::HAS_DATA.wait(), ticker.next(), mqtt_client.poll()).await {
-                Either3::First(_) => {
-                    info!("Got data to send");
-                }
+                Either3::First(_) => {}
                 Either3::Second(_) => {
                     info!("keep alive ping");
                     if let Err(err) = mqtt_client.ping().await {
