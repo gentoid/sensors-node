@@ -46,7 +46,7 @@ async fn main(spawner: Spawner) -> ! {
     info!("Starting up");
     // generator version: 1.2.0
 
-    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::_160MHz);
+    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::_80MHz);
     let peripherals = esp_hal::init(config);
 
     esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 73744);
