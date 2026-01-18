@@ -76,13 +76,13 @@ async fn main(spawner: Spawner) -> ! {
 
     spawner.must_spawn(net_task(runner));
 
-    info!("  Waiting for network...");
+    info!("Waiting for link...");
     stack.wait_link_up().await;
-    info!("Link is up!");
+    info!("  Link is up!");
 
     info!("Waiting for DHCP...");
     stack.wait_config_up().await;
-    info!("IPv4 config: {:?}", stack.config_v4());
+    info!("  IPv4 config: {:?}", stack.config_v4());
     
     spawner.must_spawn(net_time::sync_task(stack));
 
