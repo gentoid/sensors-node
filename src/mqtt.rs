@@ -67,7 +67,7 @@ pub async fn task(stack: Stack<'static>) -> ! {
             .connect(
                 tcp_socket,
                 &options,
-                Some(MqttString::from_slice("esp32s3-test-2").unwrap()),
+                Some(MqttString::from_slice("esp32s3-test").unwrap()),
             )
             .await
         {
@@ -132,7 +132,7 @@ pub async fn task(stack: Stack<'static>) -> ! {
                                 retain: true,
                                 topic: unsafe {
                                     TopicName::new_unchecked(MqttString::from_slice_unchecked(
-                                        "sensors/living_room/esp-02/all",
+                                        "sensors/living_room/esp-01/all",
                                     ))
                                 },
                             },
