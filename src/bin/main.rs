@@ -10,7 +10,7 @@
 
 use core::cell::RefCell;
 
-use defmt::info;
+use defmt::{info, warn};
 use embassy_executor::Spawner;
 use embassy_net::StackResources;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
@@ -19,7 +19,7 @@ use esp_hal::i2c;
 use esp_hal::timer::timg::TimerGroup;
 use esp_radio::wifi::WifiDevice;
 use esp_rtos::main;
-use sensors_node::net_time;
+use sensors_node::{net_time, storage};
 use static_cell::StaticCell;
 use {esp_backtrace as _, esp_println as _};
 
@@ -62,6 +62,12 @@ async fn main(spawner: Spawner) -> ! {
     let (wifi_controller, interfaces) =
         esp_radio::wifi::new(radio_init, peripherals.WIFI, Default::default())
             .expect("Failed to initialize Wi-Fi controller");
+
+    if let Err(err) = storage::init().await {
+        warn!("Couldn't initialize storage. It won't be available. Error: {}", err);
+    } else {
+        // @todo spawn a storage task
+    };
 
     spawner.must_spawn(sensors_node::wifi::task(wifi_controller));
 

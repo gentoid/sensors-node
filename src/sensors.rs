@@ -11,13 +11,22 @@ use esp_hal::{
     i2c::{self, master::I2c},
 };
 use heapless::spsc::Queue;
+use serde::{Deserialize, Serialize};
 
 use crate::{air_quality, net_time};
 
 pub static HAS_DATA: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 pub static QUEUE: Mutex<CriticalSectionRawMutex, Queue<Sample, 64>> = Mutex::new(Queue::new());
 
+#[derive(Default, Serialize, Deserialize)]
+enum SampleVersion {
+    #[default]
+    V1,
+}
+
+#[derive(Default, Serialize, Deserialize)]
 pub struct Sample {
+    version:SampleVersion,
     pub timestamp: u32,
     pub temperature: f32,
     pub pressure: f32,
@@ -145,6 +154,7 @@ pub async fn task(
             lux,
             pressure: data.pressure_hpa(),
             temperature: data.temperature_celsius(),
+            ..Default::default()
         };
         info!(
             "{{ \"ts\": {}, \"temperature\": {}, \"pressure\": {}, \"humidity\": {}, \"gas_ohm\": {}, \"lux\": {}, \"aiq_score\": {}, \"aiq\": \"{}\" }}",
