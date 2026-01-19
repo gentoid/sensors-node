@@ -84,7 +84,7 @@ embassy-futures = { version = "0.1.2", features = ["defmt"] }
 ekv = { version = "1.0.0", features = [
   "page-size-4096",
   "erase-value-255",
-  "max-page-count-2048",
+  "max-page-count-512",
   "scratch-page-count-1",
   "max-key-size-8",
   "max-value-size-256",
@@ -94,6 +94,14 @@ ekv = { version = "1.0.0", features = [
   "crc",
   "defmt",
 ] }
+embedded-storage = { version = "0.3.1" }
+# For ekv
+embassy-sync-06 = { package = "embassy-sync", version = "0.6.0", features = [
+  "defmt",
+] }
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+postcard = { version = "1.1", features = ["defmt", "use-defmt"] }
+esp-storage = { version = "0.8.0", features = ["defmt", "esp32s3"] }
 
 [profile.dev]
 # Rust debug is too slow.

@@ -63,7 +63,7 @@ async fn main(spawner: Spawner) -> ! {
         esp_radio::wifi::new(radio_init, peripherals.WIFI, Default::default())
             .expect("Failed to initialize Wi-Fi controller");
 
-    if let Err(err) = storage::init().await {
+    if let Err(err) = storage::init(peripherals.FLASH).await {
         warn!("Couldn't initialize storage. It won't be available. Error: {}", err);
     } else {
         // @todo spawn a storage task
