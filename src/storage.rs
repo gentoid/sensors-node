@@ -1,3 +1,4 @@
+use defmt::info;
 use ekv::{Database, flash::Flash};
 use embassy_sync_06::{
     blocking_mutex::raw::{CriticalSectionRawMutex, NoopRawMutex},
@@ -9,7 +10,9 @@ use static_cell::StaticCell;
 
 use crate::sensors;
 
-pub static DB: StaticCell<Mutex<CriticalSectionRawMutex, DbProxy>> = StaticCell::new();
+pub type MutexDb = Mutex<CriticalSectionRawMutex, DbProxy>;
+
+pub static DB: StaticCell<MutexDb> = StaticCell::new();
 
 const FLASH_BASE: usize = 0x600000;
 
@@ -136,7 +139,7 @@ impl DbProxy {
         }
     }
 
-    pub async fn store(&mut self, value: Value) -> Result<Key, DbError> {
+    pub async fn store(&mut self, value: &Value) -> Result<Key, DbError> {
         let key = self.next_key().await?;
 
         let mut buf = [0u8; ekv::config::MAX_VALUE_SIZE];
@@ -183,14 +186,15 @@ impl DbProxy {
     }
 }
 
-pub async fn init(flash: esp_hal::peripherals::FLASH<'static>) -> Result<(), DbError> {
+pub async fn init(flash: esp_hal::peripherals::FLASH<'static>) -> Result<&'static mut MutexDb, DbError> {
+    info!("Initializing DB...");
     let db = DbProxy::new(flash);
-    let db = DB.init(Mutex::new(db));
+    let db_mutex = DB.init(Mutex::new(db));
 
-    let db = db.get_mut();
+    let db = db_mutex.get_mut();
     if db.db.mount().await.is_err() {
         db.db.format().await?;
     }
 
-    Ok(())
+    Ok(db_mutex)
 }

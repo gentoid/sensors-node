@@ -63,11 +63,12 @@ async fn main(spawner: Spawner) -> ! {
         esp_radio::wifi::new(radio_init, peripherals.WIFI, Default::default())
             .expect("Failed to initialize Wi-Fi controller");
 
-    if let Err(err) = storage::init(peripherals.FLASH).await {
-        warn!("Couldn't initialize storage. It won't be available. Error: {}", err);
-    } else {
-        // @todo spawn a storage task
-    };
+    let mut db: Option<&'static mut storage::MutexDb> = None;
+
+    match storage::init(peripherals.FLASH).await {
+        Ok(db_proxy) => db = Some(db_proxy),
+        Err(err) => warn!("Couldn't initialize storage. It won't be available. Error: {}", err),
+    }
 
     spawner.must_spawn(sensors_node::wifi::task(wifi_controller));
 
@@ -92,7 +93,7 @@ async fn main(spawner: Spawner) -> ! {
     
     spawner.must_spawn(net_time::sync_task(stack));
 
-    spawner.must_spawn(sensors_node::mqtt::task(stack));
+    spawner.must_spawn(sensors_node::mqtt::task(stack, db));
 
     // let _connector = BleConnector::new(&radio_init, peripherals.BT, Default::default());
 

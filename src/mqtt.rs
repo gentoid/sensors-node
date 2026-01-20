@@ -16,13 +16,13 @@ use rust_mqtt::{
     types::{MqttString, QoS, TopicName},
 };
 
-use crate::{sensors, wifi};
+use crate::{sensors, storage, wifi};
 
 pub static READY: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 pub static DOWN: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 
 #[embassy_executor::task]
-pub async fn task(stack: Stack<'static>) -> ! {
+pub async fn task(stack: Stack<'static>, mut db: Option<&'static mut storage::MutexDb>) -> ! {
     info!("MQTT task started");
 
     let broker_addr = smoltcp::wire::IpAddress::v4(192, 168, 1, 11);
@@ -141,12 +141,31 @@ pub async fn task(stack: Stack<'static>) -> ! {
                         .await
                     {
                         warn!("MQTT: publish failed: {}", err);
-                        {
+
+                        let stored = {
+                            if let Some(db) = db.as_mut() {
+                                db.lock()
+                                    .await
+                                    .store(&sample)
+                                    .await
+                                    .map_err(|err| warn!("Could not write to the DB: {}", err))
+                                    .is_err()
+                            } else {
+                                false
+                            }
+                        };
+
+                        if stored {
+                            info!("Sample has been stored to the DB");
+                        } else {
                             let mut queue = sensors::QUEUE.lock().await;
-                            if let Err(_) = queue.enqueue(sample) {
+                            if let Err(_sample) = queue.enqueue(sample) {
                                 warn!("Could not put sample back to the queue");
-                            };
+                            } else {
+                                info!("Sample has been put back to the queue");
+                            }
                         }
+
                         break; // reconnect
                     }
 
