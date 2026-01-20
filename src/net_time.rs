@@ -67,6 +67,7 @@ pub async fn sync_task(
     }
 }
 
+#[allow(dead_code)]
 enum NtpError {
     Bind(embassy_net::udp::BindError),
     Send(embassy_net::udp::SendError),

@@ -26,7 +26,7 @@ enum SampleVersion {
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct Sample {
-    version:SampleVersion,
+    version: SampleVersion,
     pub timestamp: u32,
     pub temperature: f32,
     pub pressure: f32,
@@ -37,14 +37,12 @@ pub struct Sample {
 }
 
 #[embassy_executor::task]
-pub async fn task(
-    i2c_bme680: RefCell<I2c<'static, Blocking>>,
-    i2c_bh1750: I2c<'static, Blocking>,
-) -> ! {
+pub async fn task(i2c: RefCell<I2c<'static, Blocking>>) -> ! {
+
     info!("Setting up BME680");
     let mut delayer = esp_hal::delay::Delay::new();
     let mut bme_dev = Bme680::init(
-        RefCellDevice::new(&i2c_bme680),
+        RefCellDevice::new(&i2c),
         &mut delayer,
         I2CAddress::Primary, /* 0x76 */
     )
@@ -104,7 +102,7 @@ pub async fn task(
         .unwrap();
 
     let mut delayer_bh1750 = esp_hal::delay::Delay::new();
-    let mut bh1750 = BH1750::new(i2c_bh1750, &mut delayer_bh1750, false);
+    let mut bh1750 = BH1750::new(RefCellDevice::new(&i2c), &mut delayer_bh1750, false);
 
     info!(
         "Lux measurement time for HIGH2: {} ms",
@@ -140,7 +138,7 @@ pub async fn task(
             continue;
         }
 
-        let humidity = data.humidity_percent(); 
+        let humidity = data.humidity_percent();
         let timestamp = { net_time::TIME_STATE.lock().await.now_or_uptime() };
         let gas_ohm = data.gas_resistance_ohm();
 

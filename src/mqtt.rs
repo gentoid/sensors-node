@@ -67,7 +67,7 @@ pub async fn task(stack: Stack<'static>, mut db: Option<&'static mut storage::Mu
             .connect(
                 tcp_socket,
                 &options,
-                Some(MqttString::from_slice("esp32s3-test").unwrap()),
+                Some(MqttString::from_slice("esp32c6-test").unwrap()),
             )
             .await
         {
