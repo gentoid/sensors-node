@@ -40,7 +40,7 @@ type RefCellDevI2C = RefCellDevice<'static, I2C>;
 #[embassy_executor::task]
 pub async fn task(i2c: &'static mut RefCell<I2C>) -> ! {
     let mut veml = if check_i2c_address(&*i2c, 0x10) {
-        info!("Setting up VEML7700");
+        info!("I2C: VEML7700 detected");
         create_veml7700(i2c)
     } else {
         None
@@ -49,11 +49,14 @@ pub async fn task(i2c: &'static mut RefCell<I2C>) -> ! {
     Timer::after(Duration::from_secs(1)).await;
 
     let mut bme680 = if check_i2c_address(i2c, 0x76) {
+        info!("I2C: BME680 detected");
         create_bme680(i2c)
     } else {
         None
     };
+
     let mut bh1750 = if check_i2c_address(i2c, 0x23) {
+        info!("I2C: BH1750 detected");
         create_bh1750(i2c)
     } else {
         None
