@@ -27,6 +27,7 @@ esp-radio = { version = "0.17.0", features = [
     "unstable",
     "wifi",
 ] }
+esp-alloc = { version = "0.9.0", features = ["defmt"] }
 smoltcp = { version = "0.12.0", default-features = false, features = [
     "defmt",
     "medium-ethernet",
@@ -48,24 +49,24 @@ embedded-hal-bus = "0.3.0"
 rust-mqtt = { version = "*", features = ["v5", "defmt"] }
 embassy-sync = { version = "0.7.2", features = ["defmt"] }
 embassy-futures = { version = "0.1.2", features = ["defmt"] }
-ekv = { version = "1.0.0", features = [
-    "page-size-4096",
-    "erase-value-255",
-    "max-page-count-512",
-    "scratch-page-count-1",
-    "max-key-size-8",
-    "max-value-size-256",
-    "max-chunk-size-512",
-    "branching-factor-3",
-    "align-4",
-    "crc",
-    "defmt",
-] }
-embedded-storage = { version = "0.3.1" }
-# # For ekv
-embassy-sync-06 = { package = "embassy-sync", version = "0.6.0", features = [
-    "defmt",
-] }
+# ekv = { version = "1.0.0", features = [
+#     "page-size-4096",
+#     "erase-value-255",
+#     "max-page-count-512",
+#     "scratch-page-count-1",
+#     "max-key-size-8",
+#     "max-value-size-256",
+#     "max-chunk-size-512",
+#     "branching-factor-3",
+#     "align-4",
+#     "crc",
+#     "defmt",
+# ] }
+# embedded-storage = { version = "0.3.1" }
+# # # For ekv
+# embassy-sync-06 = { package = "embassy-sync", version = "0.6.0", features = [
+#     "defmt",
+# ] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 postcard = { version = "1.1", features = ["defmt", "use-defmt"] }
 # esp-storage = { version = "0.8.0", features = ["defmt", "esp32c6"] }

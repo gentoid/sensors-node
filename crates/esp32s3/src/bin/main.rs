@@ -18,15 +18,13 @@ use esp_hal::timer::timg::TimerGroup;
 use esp_hal::{Blocking, clock::CpuClock};
 use esp_radio::{ble::controller::BleConnector, wifi};
 use esp_rtos::main;
-use panic_rtt_target as _;
+// use panic_rtt_target as _;
 use sensors_node_core::net_time;
 use static_cell::StaticCell;
 use trouble_host::prelude::*;
+use {esp_backtrace as _, esp_println as _};
 
 extern crate alloc;
-
-const CONNECTIONS_MAX: usize = 1;
-const L2CAP_CHANNELS_MAX: usize = 1;
 
 // This creates a default app-descriptor required by the esp-idf bootloader.
 // For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
@@ -56,7 +54,7 @@ async fn main(spawner: Spawner) -> ! {
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::_80MHz);
     let peripherals = esp_hal::init(config);
 
-    esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 65536);
+    esp_alloc::heap_allocator!(#[esp_hal::ram(reclaimed)] size: 73744);
     // COEX needs more RAM - so we've added some more
     esp_alloc::heap_allocator!(size: 72 * 1024);
 
@@ -73,11 +71,11 @@ async fn main(spawner: Spawner) -> ! {
             .expect("Failed to initialize Wi-Fi controller");
 
     // find more examples https://github.com/embassy-rs/trouble/tree/main/examples/esp32
-    let transport = BleConnector::new(&radio_init, peripherals.BT, Default::default()).unwrap();
-    let ble_controller = ExternalController::<_, 1>::new(transport);
-    let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> =
-        HostResources::new();
-    let _stack = trouble_host::new(ble_controller, &mut resources);
+    // let transport = BleConnector::new(&radio_init, peripherals.BT, Default::default()).unwrap();
+    // let ble_controller = ExternalController::<_, 1>::new(transport);
+    // let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> =
+    //     HostResources::new();
+    // let _stack = trouble_host::new(ble_controller, &mut resources);
 
     // let mut db: Option<&'static mut storage::MutexDb> = None;
 
