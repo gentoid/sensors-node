@@ -87,6 +87,7 @@ trouble-host = { version = "0.5.0", features = ["gatt"] }
 bh1750 = "*"
 bme680 = { git = "https://github.com/marcelbuesing/bme680", rev = "838d1eaeb14be76a8d325eafd7e0896299aa9e68" }
 embedded-hal-bus = "0.3.0"
+embedded-hal-async = { version = "*" }
 
 # minimq = { version = "0.10.0", features = ["logging"]}
 smoltcp-nal = "0.7.0"
@@ -115,6 +116,10 @@ embassy-sync-06 = { package = "embassy-sync", version = "0.6.0", features = [
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 postcard = { version = "1.1", features = ["defmt", "use-defmt"] }
 esp-storage = { version = "0.8.0", features = ["defmt", "esp32c6"] }
+veml7700 = { version = "*", default-features = false, features = [
+  "is_sync",
+  "lux_as_f32",
+] }
 
 [dev-dependencies]
 embedded-test = { version = "0.7.0", features = [

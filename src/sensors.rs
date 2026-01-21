@@ -2,14 +2,11 @@ use core::cell::RefCell;
 
 use bh1750::BH1750;
 use bme680::{Bme680, I2CAddress, IIRFilterSize, PowerMode, SettingsBuilder};
-use defmt::{error, info};
+use defmt::{error, info, warn};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex, signal::Signal};
-use embassy_time::{Instant, Timer};
+use embassy_time::{Duration, Instant, Timer};
 use embedded_hal_bus::i2c::RefCellDevice;
-use esp_hal::{
-    Blocking,
-    i2c::{self, master::I2c},
-};
+use esp_hal::{Blocking, i2c};
 use heapless::spsc::Queue;
 use serde::{Deserialize, Serialize};
 
@@ -28,25 +25,165 @@ enum SampleVersion {
 pub struct Sample {
     version: SampleVersion,
     pub timestamp: u32,
-    pub temperature: f32,
-    pub pressure: f32,
-    pub humidity: f32,
-    pub gas_ohm: u32,
-    pub lux: f32,
-    pub aiq_score: u32,
+    pub temperature: Option<f32>,
+    pub pressure: Option<f32>,
+    pub humidity: Option<f32>,
+    pub gas_ohm: Option<u32>,
+    pub lux_veml7700: Option<f32>,
+    pub lux_bh1750: Option<f32>,
+    pub aiq_score: Option<u32>,
 }
 
-#[embassy_executor::task]
-pub async fn task(i2c: RefCell<I2c<'static, Blocking>>) -> ! {
+type I2C = i2c::master::I2c<'static, Blocking>;
+type RefCellDevI2C = RefCellDevice<'static, I2C>;
 
+#[embassy_executor::task]
+pub async fn task(i2c: &'static mut RefCell<I2C>) -> ! {
+    let mut veml = if check_i2c_address(&*i2c, 0x10) {
+        info!("Setting up VEML7700");
+        create_veml7700(i2c)
+    } else {
+        None
+    };
+
+    Timer::after(Duration::from_secs(1)).await;
+
+    let mut bme680 = if check_i2c_address(i2c, 0x76) {
+        create_bme680(i2c)
+    } else {
+        None
+    };
+    let mut bh1750 = if check_i2c_address(i2c, 0x23) {
+        create_bh1750(i2c)
+    } else {
+        None
+    };
+
+    let mut skip: u8 = 10;
+
+    loop {
+        let start = Instant::now();
+
+        let lux_veml7700 = veml.as_mut().and_then(|device| match device.read_lux() {
+            Ok(lux) => Some(lux),
+            Err(_) => {
+                warn!("Could not read value out of VEML7700");
+                None
+            }
+        });
+
+        let bme680_data = bme680.as_mut().and_then(|(bme, delayer)| {
+            // bme.set_sensor_mode(&mut delayer, PowerMode::ForcedMode)
+            //     .ok()?;
+            let (data, _state) = bme.get_sensor_data(delayer).ok()?;
+
+            Some((
+                data.humidity_percent(),
+                data.pressure_hpa(),
+                data.temperature_celsius(),
+                data.gas_resistance_ohm(),
+            ))
+        });
+
+        let lux_bh1750 = bh1750
+            .as_mut()
+            .and_then(|bh| bh.get_one_time_measurement(bh1750::Resolution::High2).ok());
+
+        if skip > 0 {
+            skip -= 1;
+            info!("Skip measurement. {} more to skip", skip);
+            Timer::after(embassy_time::Duration::from_secs(3)).await;
+            continue;
+        }
+
+        let timestamp = { net_time::TIME_STATE.lock().await.now_or_uptime() };
+
+        let mut sample = Sample {
+            timestamp,
+            lux_bh1750,
+            lux_veml7700,
+            ..Default::default()
+        };
+
+        bme680_data.map(|data| {
+            let (aiq_score, _) = air_quality::calculate(data.0, data.3);
+
+            sample.humidity = Some(data.0);
+            sample.pressure = Some(data.1);
+            sample.temperature = Some(data.2);
+            sample.aiq_score = Some(aiq_score);
+            sample.gas_ohm = Some(data.3);
+        });
+
+        {
+            let mut queue = QUEUE.lock().await;
+            queue.enqueue(sample).ok();
+        }
+        HAS_DATA.signal(());
+
+        let delay = embassy_time::Duration::from_secs(60) - (Instant::now() - start);
+
+        Timer::after(delay).await;
+    }
+}
+
+fn check_i2c_address(i2c: &RefCell<I2C>, addr: u8) -> bool {
+    let mut data = [0u8; 22];
+    i2c.borrow_mut()
+        .write_read(addr, &[0x00], &mut data)
+        .map_err(|err| warn!("0x{:X}: Error scanning: {}", addr, err))
+        .ok()
+        .is_some()
+}
+
+fn create_veml7700(i2c: &'static RefCell<I2C>) -> Option<veml7700::Veml7700<RefCellDevI2C>> {
+    let mut veml = veml7700::Veml7700::new(RefCellDevice::new(i2c));
+
+    veml.set_integration_time(veml7700::IntegrationTime::_800ms)
+        .ok()?;
+    veml.set_gain(veml7700::Gain::Two).ok()?;
+
+    if let Err(_err) = veml.enable() {
+        warn!("Could not enable VEML7700");
+        None
+    } else {
+        Some(veml)
+    }
+}
+
+fn create_bme680(
+    i2c: &'static RefCell<I2C>,
+) -> Option<(
+    Bme680<RefCellDevI2C, esp_hal::delay::Delay>,
+    esp_hal::delay::Delay,
+)> {
     info!("Setting up BME680");
     let mut delayer = esp_hal::delay::Delay::new();
-    let mut bme_dev = Bme680::init(
-        RefCellDevice::new(&i2c),
-        &mut delayer,
-        I2CAddress::Primary, /* 0x76 */
-    )
-    .map_err(|err| match err {
+    let mut bme = Bme680::init(RefCellDevice::new(i2c), &mut delayer, I2CAddress::Primary)
+        .map_err(bme680_error)
+        .ok()?;
+
+    info!("Setting up settings for BME680");
+    let settings = SettingsBuilder::new()
+        .with_temperature_oversampling(bme680::OversamplingSetting::OS2x)
+        .with_pressure_oversampling(bme680::OversamplingSetting::OS4x)
+        .with_humidity_oversampling(bme680::OversamplingSetting::OS2x)
+        .with_temperature_filter(IIRFilterSize::Size3)
+        .with_gas_measurement(core::time::Duration::from_millis(150), 320, 21)
+        .with_run_gas(true)
+        .build();
+
+    bme.set_sensor_settings(&mut delayer, settings).ok()?;
+
+    info!("Setting forced power modes");
+    bme.set_sensor_mode(&mut delayer, PowerMode::ForcedMode)
+        .ok()?;
+
+    Some((bme, delayer))
+}
+
+fn bme680_error(err: bme680::Error<esp_hal::i2c::master::Error>) {
+    match err {
         bme680::Error::I2C(err) => {
             error!("BME init error: I2C");
             match err {
@@ -81,28 +218,14 @@ pub async fn task(i2c: RefCell<I2c<'static, Blocking>>) -> ! {
         bme680::Error::DefinePwrMode => error!("BME init error: DefinePwrMode"),
         bme680::Error::NoNewData => error!("BME init error: NoNewData"),
         bme680::Error::BoundaryCheckFailure(_) => error!("BME init error: BoundaryCheckFailure"),
-    })
-    .unwrap();
+    }
+}
 
-    info!("Setting up settings for BME680");
-    let settings = SettingsBuilder::new()
-        .with_temperature_oversampling(bme680::OversamplingSetting::OS2x)
-        .with_pressure_oversampling(bme680::OversamplingSetting::OS4x)
-        .with_humidity_oversampling(bme680::OversamplingSetting::OS2x)
-        .with_temperature_filter(IIRFilterSize::Size3)
-        .with_gas_measurement(core::time::Duration::from_millis(150), 320, 21)
-        .with_run_gas(true)
-        .build();
-
-    bme_dev.set_sensor_settings(&mut delayer, settings).unwrap();
-
-    info!("Setting forced power modes");
-    bme_dev
-        .set_sensor_mode(&mut delayer, PowerMode::ForcedMode)
-        .unwrap();
-
-    let mut delayer_bh1750 = esp_hal::delay::Delay::new();
-    let mut bh1750 = BH1750::new(RefCellDevice::new(&i2c), &mut delayer_bh1750, false);
+fn create_bh1750(
+    i2c: &'static RefCell<I2C>,
+) -> Option<BH1750<RefCellDevI2C, esp_hal::delay::Delay>> {
+    let delayer = esp_hal::delay::Delay::new();
+    let bh1750 = BH1750::new(RefCellDevice::new(&i2c), delayer, false);
 
     info!(
         "Lux measurement time for HIGH2: {} ms",
@@ -117,63 +240,5 @@ pub async fn task(i2c: RefCell<I2c<'static, Blocking>>) -> ! {
         bh1750.get_typical_measurement_time_ms(bh1750::Resolution::Low)
     );
 
-    let mut skip: u8 = 10;
-
-    loop {
-        let start = Instant::now();
-
-        bme_dev
-            .set_sensor_mode(&mut delayer, PowerMode::ForcedMode)
-            .unwrap();
-        let (data, _state) = bme_dev.get_sensor_data(&mut delayer).unwrap();
-
-        let lux = bh1750
-            .get_one_time_measurement(bh1750::Resolution::High2)
-            .unwrap();
-
-        if skip > 0 {
-            skip -= 1;
-            info!("Skip measurement. {} more to skip", skip);
-            Timer::after(embassy_time::Duration::from_secs(3)).await;
-            continue;
-        }
-
-        let humidity = data.humidity_percent();
-        let timestamp = { net_time::TIME_STATE.lock().await.now_or_uptime() };
-        let gas_ohm = data.gas_resistance_ohm();
-
-        let (aiq_score, aiq) = air_quality::calculate(humidity, gas_ohm);
-
-        let sample = Sample {
-            timestamp,
-            aiq_score,
-            gas_ohm,
-            humidity,
-            lux,
-            pressure: data.pressure_hpa(),
-            temperature: data.temperature_celsius(),
-            ..Default::default()
-        };
-        info!(
-            "{{ \"ts\": {}, \"temperature\": {}, \"pressure\": {}, \"humidity\": {}, \"gas_ohm\": {}, \"lux\": {}, \"aiq_score\": {}, \"aiq\": \"{}\" }}",
-            sample.timestamp,
-            sample.temperature,
-            sample.pressure,
-            sample.humidity,
-            sample.gas_ohm,
-            sample.lux,
-            sample.aiq_score,
-            aiq,
-        );
-
-        {
-            let mut queue = QUEUE.lock().await;
-            queue.enqueue(sample).ok();
-        }
-        HAS_DATA.signal(());
-
-        let delay = embassy_time::Duration::from_secs(60) - (Instant::now() - start);
-
-        Timer::after(delay).await;
-    }
+    Some(bh1750)
 }

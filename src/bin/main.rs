@@ -13,7 +13,7 @@ use defmt::{info, warn};
 use embassy_executor::Spawner;
 use embassy_net::StackResources;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
-use esp_hal::clock::CpuClock;
+use esp_hal::{Blocking, clock::CpuClock};
 use esp_hal::i2c;
 use esp_hal::timer::timg::TimerGroup;
 use esp_radio::{ble::controller::BleConnector, wifi};
@@ -34,6 +34,7 @@ esp_bootloader_esp_idf::esp_app_desc!();
 
 static RADIO: StaticCell<esp_radio::Controller<'static>> = StaticCell::new();
 static RESOURCES: StaticCell<StackResources<8>> = StaticCell::new();
+static I2C_BUS: StaticCell<RefCell<i2c::master::I2c<'static, Blocking>>> = StaticCell::new();
 
 #[embassy_executor::task]
 async fn net_task(mut runner: embassy_net::Runner<'static, wifi::WifiDevice<'static>>) -> ! {
@@ -112,15 +113,13 @@ async fn main(spawner: Spawner) -> ! {
 
     spawner.must_spawn(sensors_node::mqtt::task(stack, db));
 
-    // let _connector = BleConnector::new(&radio_init, peripherals.BT, Default::default());
-
     info!("Setting up I2C");
     let i2c = i2c::master::I2c::new(peripherals.I2C0, i2c::master::Config::default())
         .unwrap()
-        .with_sda(peripherals.GPIO1)
-        .with_scl(peripherals.GPIO2);
+        .with_sda(peripherals.GPIO0)
+        .with_scl(peripherals.GPIO1);
 
-    let i2c = RefCell::new(i2c);
+    let i2c = I2C_BUS.init(RefCell::new(i2c));
 
     spawner.must_spawn(sensors_node::sensors::task(i2c));
 
