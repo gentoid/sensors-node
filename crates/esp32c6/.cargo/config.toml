@@ -1,4 +1,4 @@
-[alias]
+# [alias]
 # run-s3 = "run +esp --target xtensa-esp32s3-none-elf --features esp32s3 --no-default-features"
 # run-c6 = "run +nightly --target riscv32imac-unknown-none-elf --features esp32c6 --no-default-features"
 
