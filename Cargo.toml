@@ -1,5 +1,9 @@
 [workspace]
-members = ["crates/core", "crates/esp32c6"]
+members = [
+    "crates/core",
+    # "crates/esp32c6",
+    "crates/esp32s3",
+]
 resolver = "3"
 
 [profile.dev]
