@@ -139,9 +139,9 @@ fn check_i2c_address(i2c: &RefCell<I2C>, addr: u8) -> bool {
 fn create_veml7700(i2c: &'static RefCell<I2C>) -> Option<veml7700::Veml7700<RefCellDevI2C>> {
     let mut veml = veml7700::Veml7700::new(RefCellDevice::new(i2c));
 
-    veml.set_integration_time(veml7700::IntegrationTime::_800ms)
+    veml.set_integration_time(veml7700::IntegrationTime::_100ms)
         .ok()?;
-    veml.set_gain(veml7700::Gain::Two).ok()?;
+    veml.set_gain(veml7700::Gain::OneQuarter).ok()?;
 
     if let Err(_err) = veml.enable() {
         warn!("Could not enable VEML7700");
