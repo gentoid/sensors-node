@@ -6,7 +6,7 @@ use defmt::{error, info, warn};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex, signal::Signal};
 use embassy_time::{Duration, Instant, Timer};
 use embedded_hal_bus::i2c::RefCellDevice;
-use esp_hal::{Blocking, i2c};
+use esp_hal::{Blocking, delay::Delay, i2c};
 use heapless::spsc::Queue;
 use serde::{Deserialize, Serialize};
 
@@ -28,6 +28,8 @@ pub struct Sample {
     pub temperature: Option<f32>,
     pub pressure: Option<f32>,
     pub humidity: Option<f32>,
+    pub hum_sht40: Option<f32>,
+    pub temp_sht40: Option<f32>,
     pub gas_ohm: Option<u32>,
     pub lux_veml7700: Option<f32>,
     pub lux_bh1750: Option<f32>,
@@ -39,28 +41,30 @@ type RefCellDevI2C = RefCellDevice<'static, I2C>;
 
 #[embassy_executor::task]
 pub async fn task(i2c: &'static mut RefCell<I2C>) -> ! {
-    let mut veml = if check_i2c_address(&*i2c, 0x10) {
+    let mut sht40 = create_sht40(i2c);
+
+    let mut veml = if check_i2c_address(i2c, 0x10).await {
         info!("I2C: VEML7700 detected");
         create_veml7700(i2c)
     } else {
         None
     };
 
-    Timer::after(Duration::from_secs(1)).await;
-
-    let mut bme680 = if check_i2c_address(i2c, 0x76) {
+    let mut bme680 = if check_i2c_address(i2c, 0x76).await {
         info!("I2C: BME680 detected");
         create_bme680(i2c)
     } else {
         None
     };
 
-    let mut bh1750 = if check_i2c_address(i2c, 0x23) {
+    let mut bh1750 = if check_i2c_address(i2c, 0x23).await {
         info!("I2C: BH1750 detected");
         create_bh1750(i2c)
     } else {
         None
     };
+
+    Timer::after(Duration::from_secs(1)).await;
 
     let mut skip: u8 = 10;
 
@@ -92,6 +96,13 @@ pub async fn task(i2c: &'static mut RefCell<I2C>) -> ! {
             .as_mut()
             .and_then(|bh| bh.get_one_time_measurement(bh1750::Resolution::High2).ok());
 
+        let sht40_data = sht40.as_mut().and_then(|(device, delay)| {
+            device
+                .measure(sht4x::Precision::High, delay)
+                .inspect_err(|err| warn!("Could not measure with SHT40: {}", err))
+                .ok()
+        });
+
         if skip > 0 {
             skip -= 1;
             info!("Skip measurement. {} more to skip", skip);
@@ -118,6 +129,11 @@ pub async fn task(i2c: &'static mut RefCell<I2C>) -> ! {
             sample.gas_ohm = Some(data.3);
         });
 
+        sht40_data.map(|data| {
+            sample.hum_sht40 = Some(data.humidity_milli_percent() as f32 / 1000.0);
+            sample.temp_sht40 = Some(data.temperature_milli_celsius() as f32 / 1000.0);
+        });
+
         {
             let mut queue = QUEUE.lock().await;
             queue.enqueue(sample).ok();
@@ -130,11 +146,13 @@ pub async fn task(i2c: &'static mut RefCell<I2C>) -> ! {
     }
 }
 
-fn check_i2c_address(i2c: &RefCell<I2C>, addr: u8) -> bool {
+async fn check_i2c_address(i2c: &RefCell<I2C>, addr: u8) -> bool {
+    Timer::after(Duration::from_secs(1)).await;
+
     let mut data = [0u8; 22];
     i2c.borrow_mut()
         .write_read(addr, &[0x00], &mut data)
-        .map_err(|err| warn!("0x{:X}: Error scanning: {}", addr, err))
+        .map_err(|err| warn!("I2C: Error scanning at 0x{:X}: {}", addr, err))
         .ok()
         .is_some()
 }
@@ -244,4 +262,22 @@ fn create_bh1750(
     );
 
     Some(bh1750)
+}
+
+fn create_sht40(i2c: &'static RefCell<I2C>) -> Option<(sht4x::Sht4x<RefCellDevI2C, Delay>, Delay)> {
+    let mut delay = Delay::new();
+
+    for addr in [
+        sht4x::Address::Address0x44,
+        sht4x::Address::Address0x45,
+        sht4x::Address::Address0x46,
+    ] {
+        let mut sht40 = sht4x::Sht4x::new_with_address(RefCellDevice::new(i2c), addr);
+        if sht40.serial_number(&mut delay).is_ok() {
+            info!("I2C: SHT40 detected at 0x{:X}", u8::from(addr));
+            return Some((sht40, delay));
+        }
+    }
+
+    None
 }

@@ -112,8 +112,8 @@ async fn main(spawner: Spawner) -> ! {
     info!("Setting up I2C");
     let i2c = i2c::master::I2c::new(peripherals.I2C0, i2c::master::Config::default())
         .unwrap()
-        .with_sda(peripherals.GPIO1)
-        .with_scl(peripherals.GPIO2);
+        .with_sda(peripherals.GPIO2)
+        .with_scl(peripherals.GPIO1);
 
     let i2c = I2C_BUS.init(RefCell::new(i2c));
 

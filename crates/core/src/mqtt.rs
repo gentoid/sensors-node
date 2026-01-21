@@ -120,6 +120,8 @@ pub async fn task(stack: Stack<'static> /* , mut db: Option<&'static mut storage
                     sample.gas_ohm.inspect(|value| {write!(payload, ",\"gas_ohm\":{}", value).ok();});
                     sample.lux_bh1750.inspect(|value| {write!(payload, ",\"lux_bh1750\":{}", value).ok();});
                     sample.lux_veml7700.inspect(|value| {write!(payload, ",\"lux_veml7700\":{}", value).ok();});
+                    sample.hum_sht40.inspect(|value| {write!(payload, ",\"hum_sht40\":{}", value).ok();});
+                    sample.temp_sht40.inspect(|value| {write!(payload, ",\"temp_sht40\":{}", value).ok();});
                     sample.aiq_score.inspect(|value| {write!(payload, ",\"aiq_score\":{}", value).ok();});
                     write!(payload, "}}").ok();
 
