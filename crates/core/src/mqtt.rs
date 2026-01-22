@@ -22,7 +22,7 @@ pub static READY: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 pub static DOWN: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 
 #[embassy_executor::task]
-pub async fn task(stack: Stack<'static> /* , mut db: Option<&'static mut storage::MutexDb> */) -> ! {
+pub async fn task(stack: Stack<'static>, client_id: &'static str, topic: &'static str) -> ! {
     info!("MQTT task started");
 
     let broker_addr = smoltcp::wire::IpAddress::v4(192, 168, 1, 11);
@@ -67,7 +67,7 @@ pub async fn task(stack: Stack<'static> /* , mut db: Option<&'static mut storage
             .connect(
                 tcp_socket,
                 &options,
-                Some(MqttString::from_slice("esp32c6-test").unwrap()),
+                Some(MqttString::from_slice(client_id).unwrap()),
             )
             .await
         {
@@ -132,7 +132,7 @@ pub async fn task(stack: Stack<'static> /* , mut db: Option<&'static mut storage
                                 retain: true,
                                 topic: unsafe {
                                     TopicName::new_unchecked(MqttString::from_slice_unchecked(
-                                        "sensors/living_room/esp-01/all",
+                                        topic,
                                     ))
                                 },
                             },

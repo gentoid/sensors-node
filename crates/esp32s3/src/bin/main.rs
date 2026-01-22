@@ -84,7 +84,10 @@ async fn main(spawner: Spawner) -> ! {
     //     Err(err) => warn!("Couldn't initialize storage. It won't be available. Error: {}", err),
     // }
 
-    spawner.must_spawn(sensors_node_core::wifi::task(wifi_controller));
+    const WIFI_SSID: &'static str = env!("WIFI_SSID");
+    const WIFI_PASSWORD: &'static str = env!("WIFI_PASSWORD");
+
+    spawner.must_spawn(sensors_node_core::wifi::task(wifi_controller, WIFI_SSID, WIFI_PASSWORD));
 
     let net_config = embassy_net::Config::dhcpv4(Default::default());
 
@@ -107,7 +110,10 @@ async fn main(spawner: Spawner) -> ! {
 
     spawner.must_spawn(net_time::sync_task(stack));
 
-    spawner.must_spawn(sensors_node_core::mqtt::task(stack));
+    const CLIENT_ID: &'static str = env!("MQTT_CLIENT_ID");
+    const MQTT_TOPIC: &'static str = env!("MQTT_TOPIC");
+
+    spawner.must_spawn(sensors_node_core::mqtt::task(stack, CLIENT_ID, MQTT_TOPIC));
 
     info!("Setting up I2C");
     let i2c = i2c::master::I2c::new(peripherals.I2C0, i2c::master::Config::default())

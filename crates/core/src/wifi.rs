@@ -7,8 +7,8 @@ pub static UP: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 pub static DOWN: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 
 #[embassy_executor::task]
-pub async fn task(mut wifi: esp_radio::wifi::WifiController<'static>) -> ! {
-    setup(&mut wifi).await;
+pub async fn task(mut wifi: esp_radio::wifi::WifiController<'static>, ssid: &'static str, password: &'static str) -> ! {
+    setup(&mut wifi, ssid, password).await;
 
     let mut backoff = 1u64;
 
@@ -36,12 +36,12 @@ pub async fn task(mut wifi: esp_radio::wifi::WifiController<'static>) -> ! {
     }
 }
 
-async fn setup(wifi: &mut esp_radio::wifi::WifiController<'static>) {
+async fn setup(wifi: &mut esp_radio::wifi::WifiController<'static>, ssid: &'static str, password: &'static str) {
     info!("Setting up WiFi");
     let wifi_config = esp_radio::wifi::ModeConfig::Client(
         ClientConfig::default()
-            .with_ssid(env!("WIFI_SSID").into())
-            .with_password(env!("WIFI_PASSWORD").into())
+            .with_ssid(ssid.into())
+            .with_password(password.into())
             .with_failure_retry_cnt(3),
     );
 
