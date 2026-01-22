@@ -6,7 +6,7 @@ use defmt::{error, info, warn};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex, signal::Signal};
 use embassy_time::{Duration, Instant, Timer};
 use embedded_hal_bus::i2c::RefCellDevice;
-use esp_hal::{Blocking, delay::Delay, i2c};
+use esp_hal::{Async, delay::Delay, i2c};
 use heapless::spsc::Queue;
 use serde::{Deserialize, Serialize};
 
@@ -36,30 +36,31 @@ pub struct Sample {
     pub aiq_score: Option<u32>,
 }
 
-type I2C = i2c::master::I2c<'static, Blocking>;
-type RefCellDevI2C = RefCellDevice<'static, I2C>;
+type I2C<'a> = i2c::master::I2c<'a, Async>;
+type RefCellDevI2C<'a> = RefCellDevice<'a, I2C<'a>>;
 
 #[embassy_executor::task]
-pub async fn task(i2c: &'static mut RefCell<I2C>) -> ! {
-    let mut sht40 = create_sht40(i2c);
+pub async fn task(i2c: i2c::master::I2c<'static, Async>) -> ! {
+    let refcell_i2c = RefCell::new(i2c);
+    let mut sht40 = create_sht40(&refcell_i2c);
 
-    let mut veml = if check_i2c_address(i2c, 0x10).await {
+    let mut veml = if check_i2c_address(&refcell_i2c, 0x10).await {
         info!("I2C: VEML7700 detected");
-        create_veml7700(i2c)
+        create_veml7700(&refcell_i2c)
     } else {
         None
     };
 
-    let mut bme680 = if check_i2c_address(i2c, 0x76).await {
+    let mut bme680 = if check_i2c_address(&refcell_i2c, 0x76).await {
         info!("I2C: BME680 detected");
-        create_bme680(i2c)
+        create_bme680(&refcell_i2c)
     } else {
         None
     };
 
-    let mut bh1750 = if check_i2c_address(i2c, 0x23).await {
+    let mut bh1750 = if check_i2c_address(&refcell_i2c, 0x23).await {
         info!("I2C: BH1750 detected");
-        create_bh1750(i2c)
+        create_bh1750(&refcell_i2c)
     } else {
         None
     };
@@ -146,7 +147,7 @@ pub async fn task(i2c: &'static mut RefCell<I2C>) -> ! {
     }
 }
 
-async fn check_i2c_address(i2c: &RefCell<I2C>, addr: u8) -> bool {
+async fn check_i2c_address<'a>(i2c: &RefCell<I2C<'a>>, addr: u8) -> bool {
     Timer::after(Duration::from_secs(1)).await;
 
     let mut data = [0u8; 22];
@@ -157,7 +158,7 @@ async fn check_i2c_address(i2c: &RefCell<I2C>, addr: u8) -> bool {
         .is_some()
 }
 
-fn create_veml7700(i2c: &'static RefCell<I2C>) -> Option<veml7700::Veml7700<RefCellDevI2C>> {
+fn create_veml7700<'a>(i2c: &'a RefCell<I2C<'a>>) -> Option<veml7700::Veml7700<RefCellDevI2C<'a>>> {
     let mut veml = veml7700::Veml7700::new(RefCellDevice::new(i2c));
 
     veml.set_integration_time(veml7700::IntegrationTime::_100ms)
@@ -172,10 +173,10 @@ fn create_veml7700(i2c: &'static RefCell<I2C>) -> Option<veml7700::Veml7700<RefC
     }
 }
 
-fn create_bme680(
-    i2c: &'static RefCell<I2C>,
+fn create_bme680<'a>(
+    i2c: &'a RefCell<I2C<'a>>,
 ) -> Option<(
-    Bme680<RefCellDevI2C, esp_hal::delay::Delay>,
+    Bme680<RefCellDevI2C<'a>, esp_hal::delay::Delay>,
     esp_hal::delay::Delay,
 )> {
     info!("Setting up BME680");
@@ -242,9 +243,9 @@ fn bme680_error(err: bme680::Error<esp_hal::i2c::master::Error>) {
     }
 }
 
-fn create_bh1750(
-    i2c: &'static RefCell<I2C>,
-) -> Option<BH1750<RefCellDevI2C, esp_hal::delay::Delay>> {
+fn create_bh1750<'a>(
+    i2c: &'a RefCell<I2C<'a>>,
+) -> Option<BH1750<RefCellDevI2C<'a>, esp_hal::delay::Delay>> {
     let delayer = esp_hal::delay::Delay::new();
     let bh1750 = BH1750::new(RefCellDevice::new(&i2c), delayer, false);
 
@@ -264,7 +265,7 @@ fn create_bh1750(
     Some(bh1750)
 }
 
-fn create_sht40(i2c: &'static RefCell<I2C>) -> Option<(sht4x::Sht4x<RefCellDevI2C, Delay>, Delay)> {
+fn create_sht40<'a>(i2c: &'a RefCell<I2C<'a>>) -> Option<(sht4x::Sht4x<RefCellDevI2C<'a>, Delay>, Delay)> {
     let mut delay = Delay::new();
 
     for addr in [

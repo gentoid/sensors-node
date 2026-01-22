@@ -119,9 +119,8 @@ async fn main(spawner: Spawner) -> ! {
     let i2c = i2c::master::I2c::new(peripherals.I2C0, i2c::master::Config::default())
         .unwrap()
         .with_sda(peripherals.GPIO2)
-        .with_scl(peripherals.GPIO1);
-
-    let i2c = I2C_BUS.init(RefCell::new(i2c));
+        .with_scl(peripherals.GPIO1)
+        .into_async();
 
     spawner.must_spawn(sensors_node_core::sensors::task(i2c));
 
