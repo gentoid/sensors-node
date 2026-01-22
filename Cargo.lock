@@ -93,6 +93,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "bmp390"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5d612730453405be608728c147224bad92380df991c1b49b488f14bbb9f3e23"
+dependencies = [
+ "defmt 0.3.100",
+ "embassy-time 0.4.0",
+ "embedded-hal 1.0.0",
+ "embedded-hal-async",
+ "libm",
+ "uom",
+]
+
+[[package]]
 name = "bt-hci"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -437,7 +451,7 @@ dependencies = [
  "document-features",
  "embassy-net-driver",
  "embassy-sync 0.7.2",
- "embassy-time",
+ "embassy-time 0.5.0",
  "embedded-io-async 0.7.0",
  "embedded-nal-async",
  "heapless 0.8.0",
@@ -481,6 +495,22 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "heapless 0.8.0",
+]
+
+[[package]]
+name = "embassy-time"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f820157f198ada183ad62e0a66f554c610cdcd1a9f27d4b316358103ced7a1f8"
+dependencies = [
+ "cfg-if",
+ "critical-section",
+ "document-features",
+ "embassy-time-driver",
+ "embedded-hal 0.2.7",
+ "embedded-hal 1.0.0",
+ "embedded-hal-async",
+ "futures-util",
 ]
 
 [[package]]
@@ -1091,7 +1121,7 @@ dependencies = [
  "embassy-executor",
  "embassy-net",
  "embassy-sync 0.7.2",
- "embassy-time",
+ "embassy-time 0.5.0",
  "embedded-test",
  "esp-alloc",
  "esp-backtrace",
@@ -1391,6 +1421,12 @@ name = "libc"
 version = "0.2.180"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bcc35a38544a891a5f7c865aca548a982ccb3b8650a5b06d0fd33a10283c56fc"
+
+[[package]]
+name = "libm"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f9fbbcab51052fe104eb5e5d351cf728d30a5be1fe14d9be8a3b097481fb97de"
 
 [[package]]
 name = "linked_list_allocator"
@@ -1792,12 +1828,13 @@ version = "0.0.0"
 dependencies = [
  "bh1750",
  "bme680",
+ "bmp390",
  "defmt 1.0.1",
  "embassy-executor",
  "embassy-futures",
  "embassy-net",
  "embassy-sync 0.7.2",
- "embassy-time",
+ "embassy-time 0.5.0",
  "embedded-hal-bus",
  "esp-alloc",
  "esp-hal",
@@ -1809,6 +1846,7 @@ dependencies = [
  "sht4x",
  "smoltcp",
  "static_cell",
+ "uom",
  "veml7700",
 ]
 
@@ -1820,7 +1858,7 @@ dependencies = [
  "embassy-executor",
  "embassy-net",
  "embassy-sync 0.7.2",
- "embassy-time",
+ "embassy-time 0.5.0",
  "esp-alloc",
  "esp-bootloader-esp-idf",
  "esp-hal",
@@ -2071,7 +2109,7 @@ dependencies = [
  "bt-hci",
  "embassy-futures",
  "embassy-sync 0.7.2",
- "embassy-time",
+ "embassy-time 0.5.0",
  "embedded-io 0.6.1",
  "futures",
  "heapless 0.9.2",
@@ -2130,6 +2168,16 @@ name = "unsafe-libyaml"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
+
+[[package]]
+name = "uom"
+version = "0.36.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffd36e5350a65d112584053ee91843955826bf9e56ec0d1351214e01f6d7cd9c"
+dependencies = [
+ "num-traits",
+ "typenum",
+]
 
 [[package]]
 name = "usb-device"

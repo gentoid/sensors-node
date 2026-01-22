@@ -3,17 +3,19 @@ use core::cell::RefCell;
 use bh1750::BH1750;
 use bme680::{Bme680, I2CAddress, IIRFilterSize, PowerMode, SettingsBuilder};
 use defmt::{error, info, warn};
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex, signal::Signal};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex, signal::Signal};
 use embassy_time::{Duration, Instant, Timer};
 use embedded_hal_bus::i2c::RefCellDevice;
 use esp_hal::{Async, delay::Delay, i2c};
 use heapless::spsc::Queue;
 use serde::{Deserialize, Serialize};
+use uom::si::{pressure::hectopascal, thermodynamic_temperature::degree_celsius};
 
 use crate::{air_quality, net_time};
 
 pub static HAS_DATA: Signal<CriticalSectionRawMutex, ()> = Signal::new();
-pub static QUEUE: Mutex<CriticalSectionRawMutex, Queue<Sample, 64>> = Mutex::new(Queue::new());
+pub static QUEUE: mutex::Mutex<CriticalSectionRawMutex, Queue<Sample, 64>> =
+    mutex::Mutex::new(Queue::new());
 
 #[derive(Default, Serialize, Deserialize)]
 enum SampleVersion {
@@ -30,6 +32,8 @@ pub struct Sample {
     pub humidity: Option<f32>,
     pub hum_sht40: Option<f32>,
     pub temp_sht40: Option<f32>,
+    pub press_bmp390: Option<f32>,
+    pub temp_bmp390: Option<f32>,
     pub gas_ohm: Option<u32>,
     pub lux_veml7700: Option<f32>,
     pub lux_bh1750: Option<f32>,
@@ -40,9 +44,10 @@ type I2C<'a> = i2c::master::I2c<'a, Async>;
 type RefCellDevI2C<'a> = RefCellDevice<'a, I2C<'a>>;
 
 #[embassy_executor::task]
-pub async fn task(i2c: i2c::master::I2c<'static, Async>) -> ! {
+pub async fn task(i2c: I2C<'static>) -> ! {
     let refcell_i2c = RefCell::new(i2c);
-    let mut sht40 = create_sht40(&refcell_i2c);
+
+    Timer::after(Duration::from_secs(1)).await;
 
     let mut veml = if check_i2c_address(&refcell_i2c, 0x10).await {
         info!("I2C: VEML7700 detected");
@@ -50,6 +55,12 @@ pub async fn task(i2c: i2c::master::I2c<'static, Async>) -> ! {
     } else {
         None
     };
+    
+    Timer::after(Duration::from_secs(1)).await;
+
+    let mut sht40 = create_sht40(&refcell_i2c);
+
+    Timer::after(Duration::from_secs(1)).await;
 
     let mut bme680 = if check_i2c_address(&refcell_i2c, 0x76).await {
         info!("I2C: BME680 detected");
@@ -58,12 +69,18 @@ pub async fn task(i2c: i2c::master::I2c<'static, Async>) -> ! {
         None
     };
 
+    Timer::after(Duration::from_secs(1)).await;
+
     let mut bh1750 = if check_i2c_address(&refcell_i2c, 0x23).await {
         info!("I2C: BH1750 detected");
         create_bh1750(&refcell_i2c)
     } else {
         None
     };
+
+    Timer::after(Duration::from_secs(1)).await;
+
+    let mut bmp390 = create_bmp390(&refcell_i2c);
 
     Timer::after(Duration::from_secs(1)).await;
 
@@ -104,6 +121,8 @@ pub async fn task(i2c: i2c::master::I2c<'static, Async>) -> ! {
                 .ok()
         });
 
+        let bmp390_data = bmp390.as_mut().and_then(|device| device.measure().ok());
+
         if skip > 0 {
             skip -= 1;
             info!("Skip measurement. {} more to skip", skip);
@@ -133,6 +152,11 @@ pub async fn task(i2c: i2c::master::I2c<'static, Async>) -> ! {
         sht40_data.map(|data| {
             sample.hum_sht40 = Some(data.humidity_milli_percent() as f32 / 1000.0);
             sample.temp_sht40 = Some(data.temperature_milli_celsius() as f32 / 1000.0);
+        });
+
+        bmp390_data.map(|data| {
+            sample.temp_bmp390 = Some(data.temperature.get::<degree_celsius>());
+            sample.press_bmp390 = Some(data.pressure.get::<hectopascal>());
         });
 
         {
@@ -265,7 +289,9 @@ fn create_bh1750<'a>(
     Some(bh1750)
 }
 
-fn create_sht40<'a>(i2c: &'a RefCell<I2C<'a>>) -> Option<(sht4x::Sht4x<RefCellDevI2C<'a>, Delay>, Delay)> {
+fn create_sht40<'a>(
+    i2c: &'a RefCell<I2C<'a>>,
+) -> Option<(sht4x::Sht4x<RefCellDevI2C<'a>, Delay>, Delay)> {
     let mut delay = Delay::new();
 
     for addr in [
@@ -273,10 +299,28 @@ fn create_sht40<'a>(i2c: &'a RefCell<I2C<'a>>) -> Option<(sht4x::Sht4x<RefCellDe
         sht4x::Address::Address0x45,
         sht4x::Address::Address0x46,
     ] {
-        let mut sht40 = sht4x::Sht4x::new_with_address(RefCellDevice::new(i2c), addr);
+        let mut sht40 = sht4x::Sht4x::new_with_address(RefCellDevice::new(&i2c), addr);
         if sht40.serial_number(&mut delay).is_ok() {
             info!("I2C: SHT40 detected at 0x{:X}", u8::from(addr));
             return Some((sht40, delay));
+        }
+    }
+
+    None
+}
+
+fn create_bmp390<'a>(i2c: &'a RefCell<I2C<'a>>) -> Option<bmp390::sync::Bmp390<RefCellDevI2C<'a>>> {
+    use bmp390::{Address, Configuration, sync::Bmp390};
+
+    let delay = esp_hal::delay::Delay::new();
+    let config = Configuration::default();
+
+    for addr in [Address::Up, Address::Down] {
+        let sensor = Bmp390::try_new(RefCellDevice::new(i2c), addr, delay, &config).ok();
+
+        if sensor.is_some() {
+            info!("I2C: BMP390 detected");
+            return sensor;
         }
     }
 

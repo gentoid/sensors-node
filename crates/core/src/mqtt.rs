@@ -120,6 +120,8 @@ pub async fn task(stack: Stack<'static>, client_id: &'static str, topic: &'stati
                     sample.gas_ohm.inspect(|value| {write!(payload, ",\"gas_ohm\":{}", value).ok();});
                     sample.lux_bh1750.inspect(|value| {write!(payload, ",\"lux_bh1750\":{}", value).ok();});
                     sample.lux_veml7700.inspect(|value| {write!(payload, ",\"lux_veml7700\":{}", value).ok();});
+                    sample.temp_bmp390.inspect(|value| {write!(payload, ",\"temp_bmp390\":{}", value).ok();});
+                    sample.press_bmp390.inspect(|value| {write!(payload, ",\"press_bmp390\":{}", value).ok();});
                     sample.hum_sht40.inspect(|value| {write!(payload, ",\"hum_sht40\":{}", value).ok();});
                     sample.temp_sht40.inspect(|value| {write!(payload, ",\"temp_sht40\":{}", value).ok();});
                     sample.aiq_score.inspect(|value| {write!(payload, ",\"aiq_score\":{}", value).ok();});
@@ -129,7 +131,7 @@ pub async fn task(stack: Stack<'static>, client_id: &'static str, topic: &'stati
                         .publish(
                             &PublicationOptions {
                                 qos: QoS::AtLeastOnce,
-                                retain: true,
+                                retain: false,
                                 topic: unsafe {
                                     TopicName::new_unchecked(MqttString::from_slice_unchecked(
                                         topic,

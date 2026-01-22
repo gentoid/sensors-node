@@ -72,6 +72,11 @@ postcard = { version = "1.1", features = ["defmt", "use-defmt"] }
 # esp-storage = { version = "0.8.0", features = ["defmt", "esp32c6"] }
 veml7700 = { version = "*" }
 sht4x = { version = "*", features = ["defmt"] }
+bmp390 = { version = "0.4.0", default-features = false, features = [
+    "embassy-time",
+    "sync",
+] }
+uom = { version = "0.36.0", default-features = false, features = ["f32", "si"] }
 
 [features]
 esp32s3 = ["esp-hal/esp32s3", "esp-radio/esp32s3"]
