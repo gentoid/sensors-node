@@ -1499,6 +1499,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 
 [[package]]
+name = "panic-rtt-target"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a8116ffce1f89818647b84fba66d16cfdf3c0bee3c9320e606588d3e7415ce7"
+dependencies = [
+ "critical-section",
+ "defmt 0.3.100",
+ "portable-atomic",
+ "rtt-target",
+]
+
+[[package]]
 name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1704,6 +1716,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rtt-target"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7afed1f4302eeba88c601636cf2c554c45e1cbb464bab44c6012bab0e71473c"
+dependencies = [
+ "critical-section",
+ "defmt 0.3.100",
+ "portable-atomic",
+ "ufmt-write",
+]
+
+[[package]]
 name = "rust-mqtt"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1786,6 +1810,27 @@ dependencies = [
  "smoltcp",
  "static_cell",
  "veml7700",
+]
+
+[[package]]
+name = "sensors_node_esp32_c6"
+version = "0.1.0"
+dependencies = [
+ "defmt 1.0.1",
+ "embassy-executor",
+ "embassy-net",
+ "embassy-sync 0.7.2",
+ "embassy-time",
+ "esp-alloc",
+ "esp-bootloader-esp-idf",
+ "esp-hal",
+ "esp-radio",
+ "esp-rtos",
+ "panic-rtt-target",
+ "rtt-target",
+ "sensors_node_core",
+ "static_cell",
+ "trouble-host",
 ]
 
 [[package]]
