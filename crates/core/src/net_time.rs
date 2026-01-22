@@ -67,6 +67,7 @@ pub async fn sync_task(
     }
 }
 
+#[allow(dead_code)]
 enum NtpError {
     Bind(embassy_net::udp::BindError),
     Send(embassy_net::udp::SendError),
@@ -74,7 +75,7 @@ enum NtpError {
     Other,
 }
 
-async fn sync_time(stack: embassy_net::Stack<'static>) -> Result<u32, NtpError> {
+async fn sync_time(stack: embassy_net::Stack<'_>) -> Result<u32, NtpError> {
     use embassy_net::udp::UdpSocket;
 
     info!("Getting NTP time");

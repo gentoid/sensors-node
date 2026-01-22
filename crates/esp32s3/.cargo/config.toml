@@ -1,4 +1,5 @@
 [target.xtensa-esp32s3-none-elf]
+# runner = "probe-rs run --chip=esp32s3 --preverify --always-print-stacktrace --no-location --catch-hardfault"
 runner = "espflash flash --monitor --chip esp32s3 --log-format defmt --baud=921600"
 
 [env]
