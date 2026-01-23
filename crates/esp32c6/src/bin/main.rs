@@ -17,14 +17,10 @@ use esp_hal::timer::timg::TimerGroup;
 use esp_radio::{ble::controller::BleConnector, wifi};
 use esp_rtos::main;
 use panic_rtt_target as _;
-use sensors_node_core::net_time;
+use sensors_node_core::{ble, net_time};
 use static_cell::StaticCell;
-use trouble_host::prelude::*;
 
 extern crate alloc;
-
-const CONNECTIONS_MAX: usize = 1;
-const L2CAP_CHANNELS_MAX: usize = 1;
 
 // This creates a default app-descriptor required by the esp-idf bootloader.
 // For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
@@ -71,12 +67,12 @@ async fn main(spawner: Spawner) -> ! {
         esp_radio::wifi::new(radio_init, peripherals.WIFI, Default::default())
             .expect("Failed to initialize Wi-Fi controller");
 
+    info!("[ BLE ] Setting up");
     // find more examples https://github.com/embassy-rs/trouble/tree/main/examples/esp32
-    let transport = BleConnector::new(&radio_init, peripherals.BT, Default::default()).unwrap();
-    let ble_controller = ExternalController::<_, 1>::new(transport);
-    let mut resources: HostResources<DefaultPacketPool, CONNECTIONS_MAX, L2CAP_CHANNELS_MAX> =
-        HostResources::new();
-    let _stack = trouble_host::new(ble_controller, &mut resources);
+    let transport = BleConnector::new(radio_init, peripherals.BT, Default::default()).unwrap();
+    let ble_controller = trouble_host::prelude::ExternalController:: <_,20> ::new(transport);
+
+    spawner.must_spawn(ble::task(ble_controller));
 
     // let mut db: Option<&'static mut storage::MutexDb> = None;
 

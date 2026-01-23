@@ -77,6 +77,14 @@ bmp390 = { version = "0.4.0", default-features = false, features = [
     "sync",
 ] }
 uom = { version = "0.36.0", default-features = false, features = ["f32", "si"] }
+trouble-host = { version = "0.5.0", default-features = false, features = [
+    "gatt",
+    "peripheral",
+    "central",
+    "derive",
+    "default-packet-pool-mtu-255",
+    "trouble-host-macros",
+] }
 
 [features]
 esp32s3 = ["esp-hal/esp32s3", "esp-radio/esp32s3"]

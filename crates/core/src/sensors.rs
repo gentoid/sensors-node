@@ -56,11 +56,11 @@ pub async fn task(i2c: I2C<'static>) -> ! {
         None
     };
     
-    Timer::after(Duration::from_secs(1)).await;
+    // Timer::after(Duration::from_secs(1)).await;
 
     let mut sht40 = create_sht40(&refcell_i2c);
 
-    Timer::after(Duration::from_secs(1)).await;
+    // Timer::after(Duration::from_secs(1)).await;
 
     let mut bme680 = if check_i2c_address(&refcell_i2c, 0x76).await {
         info!("I2C: BME680 detected");
@@ -69,7 +69,7 @@ pub async fn task(i2c: I2C<'static>) -> ! {
         None
     };
 
-    Timer::after(Duration::from_secs(1)).await;
+    // Timer::after(Duration::from_secs(1)).await;
 
     let mut bh1750 = if check_i2c_address(&refcell_i2c, 0x23).await {
         info!("I2C: BH1750 detected");
@@ -78,11 +78,11 @@ pub async fn task(i2c: I2C<'static>) -> ! {
         None
     };
 
-    Timer::after(Duration::from_secs(1)).await;
+    // Timer::after(Duration::from_secs(1)).await;
 
     let mut bmp390 = create_bmp390(&refcell_i2c);
 
-    Timer::after(Duration::from_secs(1)).await;
+    // Timer::after(Duration::from_secs(1)).await;
 
     let mut skip: u8 = 10;
 

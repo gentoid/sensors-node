@@ -1846,6 +1846,7 @@ dependencies = [
  "sht4x",
  "smoltcp",
  "static_cell",
+ "trouble-host",
  "uom",
  "veml7700",
 ]

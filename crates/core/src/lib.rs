@@ -6,3 +6,4 @@ pub mod net_time;
 pub mod sensors;
 pub mod storage;
 pub mod wifi;
+pub mod ble;
