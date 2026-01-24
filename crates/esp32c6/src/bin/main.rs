@@ -12,17 +12,17 @@ use embassy_executor::Spawner;
 use embassy_futures::select;
 use embassy_net::StackResources;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
+use esp_hal::clock::CpuClock;
 use esp_hal::i2c;
 use esp_hal::peripherals::Peripherals;
 use esp_hal::rmt::Rmt;
 use esp_hal::time::Rate;
 use esp_hal::timer::timg::TimerGroup;
-use esp_hal::{clock::CpuClock, rmt::PulseCode};
 use esp_hal_smartled::{SmartLedsAdapter, smart_led_buffer};
 use esp_radio::{ble::controller::BleConnector, wifi};
 use esp_rtos::main;
 use panic_rtt_target as _;
-use sensors_node_core::{ble, led, net_time, system};
+use sensors_node_core::{ble, led, net_time, system, web};
 use static_cell::StaticCell;
 
 extern crate alloc;
@@ -83,10 +83,9 @@ async fn main(spawner: Spawner) -> ! {
     let sw_interrupt =
         esp_hal::interrupt::software::SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
-    
-    
+
     info!("Embassy initialized!");
-    
+
     spawner.must_spawn(led_task());
     system::set_state(system::State::Booting);
 
@@ -146,6 +145,16 @@ async fn main(spawner: Spawner) -> ! {
     const MQTT_TOPIC: &'static str = env!("MQTT_TOPIC");
 
     spawner.must_spawn(sensors_node_core::mqtt::task(stack, CLIENT_ID, MQTT_TOPIC));
+
+    info!("Starting up web-server");
+    let web_app = {
+        static WEB_APP_STATIC: StaticCell<web::WebApp> = StaticCell::new();
+        WEB_APP_STATIC.init(web::WebApp::default())
+    };
+
+    for task_id in 0..web::WEB_TASK_POOL_SIZE {
+        spawner.must_spawn(web::task(task_id, stack, web_app.router, web_app.config));
+    }
 
     info!("Setting up I2C");
     let i2c = i2c::master::I2c::new(peripherals.I2C0, i2c::master::Config::default())

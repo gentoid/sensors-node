@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ESP32 Device Setup</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        form { max-width: 300px; margin: 0 auto; }
+        div { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; }
+        input { width: 100%; padding: 8px; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background-color: #007bff; color: white; border: none; }
+    </style>
+</head>
+<body>
+    <h2 style="text-align:center;">Device Configuration</h2>
+    <form action="/save" method="POST">
+        <!-- Wi-Fi Settings -->
+        <div>
+            <label>Wi-Fi SSID:</label>
+            <input type="text" name="wifi_ssid" placeholder="Home_Network">
+        </div>
+        <div>
+            <label>Wi-Fi Password:</label>
+            <input type="password" name="wifi_password" placeholder="Password">
+        </div>
+        
+        <!-- Cloud/Server Settings -->
+        <div>
+            <label>MQTT Broker URL:</label>
+            <input type="text" name="mqtt_broker" placeholder="broker.host.com">
+        </div>
+        <div>
+            <label>MQTT client id:</label>
+            <input type="text" name="mqtt_client_id" placeholder="unique-id-123">
+        </div>
+        <div>
+            <label>Publish topic:</label>
+            <input type="text" name="mqtt_topic" placeholder="sensors/living_room/my_device/temperature">
+        </div>
+        
+        <button type="submit">Save & Reboot</button>
+    </form>
+</body>
+</html>

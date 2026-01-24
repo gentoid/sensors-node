@@ -1,4 +1,3 @@
-use defmt::info;
 use embassy_time::Timer;
 use esp_hal_smartled::SmartLedsAdapter;
 use rgb::Grb;

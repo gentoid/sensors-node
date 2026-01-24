@@ -53,7 +53,7 @@ esp-radio = { version = "0.17.0", features = [
   "unstable",
   "wifi",
 ] }
-trouble-host = { version = "0.5.0", default-features = false, features = [] }
+trouble-host = { version = "0.5.1", default-features = false, features = [] }
 
 embassy-sync = { version = "0.7.2", features = ["defmt"] }
 sensors_node_core = { path = "../core/", features = ["esp32c6"] }

@@ -15,7 +15,7 @@ embassy-net = { version = "0.8.0", features = [
     "udp",
 ] }
 static_cell = "2.1.1"
-heapless = { version = "0.8.0" }
+heapless = { version = "0.9.2", features = ["serde"] }
 
 defmt = "1.0.1"
 esp-radio = { version = "0.17.0", features = [
@@ -72,12 +72,12 @@ postcard = { version = "1.1", features = ["defmt", "use-defmt"] }
 # esp-storage = { version = "0.8.0", features = ["defmt", "esp32c6"] }
 veml7700 = { version = "*" }
 sht4x = { version = "*", features = ["defmt"] }
-bmp390 = { version = "0.4.0", default-features = false, features = [
+bmp390 = { version = "0.4.1", default-features = false, features = [
     "embassy-time",
     "sync",
 ] }
 uom = { version = "0.36.0", default-features = false, features = ["f32", "si"] }
-trouble-host = { version = "0.5.0", default-features = false, features = [
+trouble-host = { version = "0.5.1", default-features = false, features = [
     "gatt",
     "peripheral",
     "central",
@@ -88,6 +88,10 @@ trouble-host = { version = "0.5.0", default-features = false, features = [
 smart-leds = { version = "0.4.0" }
 esp-hal-smartled = { version = "0.17.0", features = ["defmt"] }
 rgb = { version = "0.8.52" }
+picoserve = { git = "https://github.com/sammhicks/picoserve.git", rev = "d68a53550aa974e58cf4228b9d9424a5432558e1", features = [
+    "defmt",
+    "embassy",
+] }
 
 [features]
 esp32s3 = ["esp-hal/esp32s3", "esp-radio/esp32s3", "esp-hal-smartled/esp32s3"]
