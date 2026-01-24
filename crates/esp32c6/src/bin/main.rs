@@ -9,15 +9,20 @@
 
 use defmt::info;
 use embassy_executor::Spawner;
+use embassy_futures::select;
 use embassy_net::StackResources;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
-use esp_hal::clock::CpuClock;
 use esp_hal::i2c;
+use esp_hal::peripherals::Peripherals;
+use esp_hal::rmt::Rmt;
+use esp_hal::time::Rate;
 use esp_hal::timer::timg::TimerGroup;
+use esp_hal::{clock::CpuClock, rmt::PulseCode};
+use esp_hal_smartled::{SmartLedsAdapter, smart_led_buffer};
 use esp_radio::{ble::controller::BleConnector, wifi};
 use esp_rtos::main;
 use panic_rtt_target as _;
-use sensors_node_core::{ble, net_time};
+use sensors_node_core::{ble, led, net_time, system};
 use static_cell::StaticCell;
 
 extern crate alloc;
@@ -32,6 +37,27 @@ static RESOURCES: StaticCell<StackResources<8>> = StaticCell::new();
 #[embassy_executor::task]
 async fn net_task(mut runner: embassy_net::Runner<'static, wifi::WifiDevice<'static>>) -> ! {
     runner.run().await;
+}
+
+#[embassy_executor::task]
+pub async fn led_task() -> ! {
+    let mut led_buf = smart_led_buffer!(1);
+    let peripherals = unsafe { Peripherals::steal() };
+
+    let mut led = {
+        let rmt = Rmt::new(peripherals.RMT, Rate::from_mhz(80)).unwrap();
+        let led = SmartLedsAdapter::new(rmt.channel0, peripherals.GPIO8, &mut led_buf);
+        sensors_node_core::led::Status::new(led)
+    };
+
+    let mut state = system::State::default();
+
+    loop {
+        match select::select(system::STATE.wait(), led::pattern(&mut led, &state)).await {
+            select::Either::First(new_state) => state = new_state,
+            select::Either::Second(_) => {}
+        }
+    }
 }
 
 #[allow(
@@ -57,8 +83,12 @@ async fn main(spawner: Spawner) -> ! {
     let sw_interrupt =
         esp_hal::interrupt::software::SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
     esp_rtos::start(timg0.timer0, sw_interrupt.software_interrupt0);
-
+    
+    
     info!("Embassy initialized!");
+    
+    spawner.must_spawn(led_task());
+    system::set_state(system::State::Booting);
 
     let radio_init =
         RADIO.init(esp_radio::init().expect("Failed to initialize Wi-Fi/BLE controller"));
@@ -70,7 +100,7 @@ async fn main(spawner: Spawner) -> ! {
     info!("[ BLE ] Setting up");
     // find more examples https://github.com/embassy-rs/trouble/tree/main/examples/esp32
     let transport = BleConnector::new(radio_init, peripherals.BT, Default::default()).unwrap();
-    let ble_controller = trouble_host::prelude::ExternalController:: <_,20> ::new(transport);
+    let ble_controller = trouble_host::prelude::ExternalController::<_, 20>::new(transport);
 
     spawner.must_spawn(ble::task(ble_controller));
 
@@ -101,6 +131,7 @@ async fn main(spawner: Spawner) -> ! {
 
     spawner.must_spawn(net_task(runner));
 
+    system::set_state(system::State::WifiConnecting);
     info!("Waiting for link...");
     stack.wait_link_up().await;
     info!("  Link is up!");
@@ -125,6 +156,7 @@ async fn main(spawner: Spawner) -> ! {
 
     spawner.must_spawn(sensors_node_core::sensors::task(i2c));
 
+    system::set_state(system::State::Ok);
     loop {
         let forever = embassy_sync::signal::Signal::<NoopRawMutex, ()>::new();
         forever.wait().await;

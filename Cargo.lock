@@ -883,6 +883,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "esp-hal-smartled"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23eaae863a73f9bd1626687f539ff38942b442ae3974838ceeae5e932ddf0a2a"
+dependencies = [
+ "defmt 1.0.1",
+ "document-features",
+ "esp-hal",
+ "rgb",
+ "smart-leds-trait",
+]
+
+[[package]]
 name = "esp-metadata-generated"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1680,6 +1693,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76afc826de14238e6e8c374ddcc1fa19e374fd8dd986b0d2af0d02377261d83c"
 
 [[package]]
+name = "rgb"
+version = "0.8.52"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c6a884d2998352bb4daf0183589aec883f16a6da1f4dde84d8e2e9a5409a1ce"
+dependencies = [
+ "bytemuck",
+]
+
+[[package]]
 name = "riscv"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1838,12 +1860,15 @@ dependencies = [
  "embedded-hal-bus",
  "esp-alloc",
  "esp-hal",
+ "esp-hal-smartled",
  "esp-radio",
  "heapless 0.8.0",
  "postcard",
+ "rgb",
  "rust-mqtt",
  "serde",
  "sht4x",
+ "smart-leds",
  "smoltcp",
  "static_cell",
  "trouble-host",
@@ -1857,17 +1882,20 @@ version = "0.1.0"
 dependencies = [
  "defmt 1.0.1",
  "embassy-executor",
+ "embassy-futures",
  "embassy-net",
  "embassy-sync 0.7.2",
  "embassy-time 0.5.0",
  "esp-alloc",
  "esp-bootloader-esp-idf",
  "esp-hal",
+ "esp-hal-smartled",
  "esp-radio",
  "esp-rtos",
  "panic-rtt-target",
  "rtt-target",
  "sensors_node_core",
+ "smart-leds",
  "static_cell",
  "trouble-host",
 ]
@@ -1925,6 +1953,24 @@ dependencies = [
  "embedded-hal 1.0.0",
  "fixed",
  "sensirion-i2c",
+]
+
+[[package]]
+name = "smart-leds"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66df34e571fa9993fa6f99131a374d58ca3d694b75f9baac93458fe0d6057bf0"
+dependencies = [
+ "smart-leds-trait",
+]
+
+[[package]]
+name = "smart-leds-trait"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a7f4441a131924d58da6b83a7ad765c460e64630cce504376c3a87a2558c487f"
+dependencies = [
+ "rgb",
 ]
 
 [[package]]
