@@ -30,6 +30,9 @@ pub async fn task(stack: Stack<'static>, client_id: &'static str, topic: &'stati
 
     let mut backoff = 1u64;
 
+    let client_id = Some(MqttString::from_slice(client_id).unwrap());
+    let topic = unsafe { TopicName::new_unchecked(MqttString::from_slice(topic).unwrap()) };
+
     loop {
         info!("MQTT: waiting for WiFi...");
         wifi::UP.wait().await;
@@ -64,14 +67,11 @@ pub async fn task(stack: Stack<'static>, client_id: &'static str, topic: &'stati
         };
 
         if let Err(err) = mqtt_client
-            .connect(
-                tcp_socket,
-                &options,
-                Some(MqttString::from_slice(client_id).unwrap()),
-            )
+            .connect(tcp_socket, &options, client_id.clone())
             .await
         {
             warn!("MQTT: connect failed: {}", err);
+            mqtt_client.abort().await;
             Timer::after_secs(backoff).await;
             backoff = (backoff * 2).min(30);
             continue;
@@ -132,11 +132,7 @@ pub async fn task(stack: Stack<'static>, client_id: &'static str, topic: &'stati
                             &PublicationOptions {
                                 qos: QoS::AtLeastOnce,
                                 retain: false,
-                                topic: unsafe {
-                                    TopicName::new_unchecked(MqttString::from_slice_unchecked(
-                                        topic,
-                                    ))
-                                },
+                                topic: topic.clone(),
                             },
                             Bytes::Borrowed(payload.as_bytes()),
                         )
