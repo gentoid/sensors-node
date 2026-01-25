@@ -7,22 +7,35 @@
 )]
 #![deny(clippy::large_stack_frames)]
 
-use defmt::{info, warn};
+use core::net::Ipv4Addr;
+
+use defmt::{error, info};
+use edge_nal::UdpBind;
 use embassy_executor::Spawner;
 use embassy_futures::select;
-use embassy_net::StackResources;
+use embassy_net::{Runner, StackResources};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
-use esp_hal::clock::CpuClock;
+use embassy_time::Timer;
 use esp_hal::i2c;
 use esp_hal::peripherals::Peripherals;
 use esp_hal::rmt::Rmt;
 use esp_hal::time::Rate;
 use esp_hal::timer::timg::TimerGroup;
+use esp_hal::{Async, clock::CpuClock};
 use esp_hal_smartled::{SmartLedsAdapter, smart_led_buffer};
-use esp_radio::{ble::controller::BleConnector, wifi};
+use esp_radio::wifi::AccessPointConfig;
+use esp_radio::{
+    ble::controller::BleConnector,
+    wifi::{self, WifiController, WifiDevice},
+};
 use esp_rtos::main;
 use panic_rtt_target as _;
-use sensors_node_core::{ble, led, net_time, system, web, kv_storage};
+use sensors_node_core::wifi::print_wifi_error;
+use sensors_node_core::{
+    ble,
+    config::{Settings, get_initial_settings},
+    kv_storage, led, net_time, system, web,
+};
 use static_cell::StaticCell;
 
 extern crate alloc;
@@ -33,9 +46,10 @@ esp_bootloader_esp_idf::esp_app_desc!();
 
 static RADIO: StaticCell<esp_radio::Controller<'static>> = StaticCell::new();
 static RESOURCES: StaticCell<StackResources<8>> = StaticCell::new();
+static FLASH_KV_START: usize = 0x600_000;
 
 #[embassy_executor::task]
-async fn net_task(mut runner: embassy_net::Runner<'static, wifi::WifiDevice<'static>>) -> ! {
+async fn net_task(mut runner: Runner<'static, wifi::WifiDevice<'static>>) -> ! {
     runner.run().await;
 }
 
@@ -103,26 +117,54 @@ async fn main(spawner: Spawner) -> ! {
 
     spawner.must_spawn(ble::task(ble_controller));
 
-    
-
-    let mut kv_db = match kv_storage::init(peripherals.FLASH).await {
+    let kv_db = match kv_storage::init(peripherals.FLASH, FLASH_KV_START).await {
         Ok(db) => db,
-        Err(err) => panic!("Couldn't initialize storage. It won't be available. Error: {:?}", err),
+        Err(err) => panic!(
+            "Couldn't initialize storage. It won't be available. Error: {:?}",
+            err
+        ),
     };
 
-    const WIFI_SSID: &'static str = env!("WIFI_SSID");
-    const WIFI_PASSWORD: &'static str = env!("WIFI_PASSWORD");
+    match get_initial_settings(kv_db).await {
+        Ok(settings) => {
+            info!("Setting up I2C");
+            let i2c = i2c::master::I2c::new(peripherals.I2C0, i2c::master::Config::default())
+                .unwrap()
+                .with_sda(peripherals.GPIO0)
+                .with_scl(peripherals.GPIO1)
+                .into_async();
+
+            run(spawner, wifi_controller, interfaces.sta, i2c, settings).await
+        }
+        Err(err) => {
+            info!("Could not get initial settings: {}", err);
+            init_start(spawner, wifi_controller, interfaces.ap, kv_db).await
+        }
+    }
+}
+
+async fn run(
+    spawner: Spawner,
+    wifi_controller: WifiController<'static>,
+    device: WifiDevice<'static>,
+    i2c: i2c::master::I2c<'static, Async>,
+    settings: Settings,
+) -> ! {
+    let settings = {
+        static SETTINGS_STATIC: StaticCell<Settings> = StaticCell::new();
+        SETTINGS_STATIC.init(settings)
+    };
 
     spawner.must_spawn(sensors_node_core::wifi::task(
         wifi_controller,
-        WIFI_SSID,
-        WIFI_PASSWORD,
+        settings.wifi_ssid.as_str(),
+        settings.wifi_password.as_str(),
     ));
 
     let net_config = embassy_net::Config::dhcpv4(Default::default());
 
     let (stack, runner) = embassy_net::new(
-        interfaces.sta,
+        device,
         net_config,
         RESOURCES.init(StackResources::new()),
         embassy_time::Instant::now().as_millis(),
@@ -141,27 +183,11 @@ async fn main(spawner: Spawner) -> ! {
 
     spawner.must_spawn(net_time::sync_task(stack));
 
-    const CLIENT_ID: &'static str = env!("MQTT_CLIENT_ID");
-    const MQTT_TOPIC: &'static str = env!("MQTT_TOPIC");
-
-    spawner.must_spawn(sensors_node_core::mqtt::task(stack, CLIENT_ID, MQTT_TOPIC));
-
-    info!("Starting up web-server");
-    let web_app = {
-        static WEB_APP_STATIC: StaticCell<web::WebApp> = StaticCell::new();
-        WEB_APP_STATIC.init(web::WebApp::new(kv_db))
-    };
-
-    for task_id in 0..web::WEB_TASK_POOL_SIZE {
-        spawner.must_spawn(web::task(task_id, stack, web_app.router, web_app.config));
-    }
-
-    info!("Setting up I2C");
-    let i2c = i2c::master::I2c::new(peripherals.I2C0, i2c::master::Config::default())
-        .unwrap()
-        .with_sda(peripherals.GPIO0)
-        .with_scl(peripherals.GPIO1)
-        .into_async();
+    spawner.must_spawn(sensors_node_core::mqtt::task(
+        stack,
+        settings.mqtt_client_id.as_str(),
+        settings.mqtt_topic.as_str(),
+    ));
 
     spawner.must_spawn(sensors_node_core::sensors::task(i2c));
 
@@ -169,5 +195,95 @@ async fn main(spawner: Spawner) -> ! {
     loop {
         let forever = embassy_sync::signal::Signal::<NoopRawMutex, ()>::new();
         forever.wait().await;
+    }
+}
+
+async fn init_start(
+    spawner: Spawner,
+    mut wifi_controller: WifiController<'static>,
+    device: WifiDevice<'static>,
+    kv_db: &'static kv_storage::Db,
+) -> ! {
+    info!("Starting up web-server");
+    let web_app = {
+        static WEB_APP_STATIC: StaticCell<web::WebApp> = StaticCell::new();
+        WEB_APP_STATIC.init(web::WebApp::new(kv_db))
+    };
+
+    let net_config = embassy_net::Config::ipv4_static(embassy_net::StaticConfigV4 {
+        address: embassy_net::Ipv4Cidr::new(Ipv4Addr::new(192, 168, 1, 1), 24),
+        dns_servers: heapless_08::Vec::new(),
+        gateway: None,
+    });
+
+    // let net_config = embassy_net::Config::dhcpv4(DhcpConfig::default());
+
+    let ap_config = AccessPointConfig::default().with_ssid("esp32-setup".into());
+
+    let _ = wifi_controller.set_config(&wifi::ModeConfig::AccessPoint(ap_config));
+
+    let (stack, runner) = embassy_net::new(
+        device,
+        net_config,
+        RESOURCES.init(StackResources::new()),
+        embassy_time::Instant::now().as_millis(),
+    );
+
+    spawner.must_spawn(net_task(runner));
+
+    loop {
+        info!("Starting WIFI");
+        if let Err(err) = wifi_controller.start_async().await {
+            print_wifi_error(err);
+            Timer::after_secs(5).await;
+        } else {
+            break;
+        }
+    }
+    
+    spawner.must_spawn(dhcp_task(stack));
+
+    for task_id in 0..web::WEB_TASK_POOL_SIZE {
+        spawner.must_spawn(web::task(task_id, stack, web_app.router, web_app.config));
+    }
+
+    loop {
+        let forever = embassy_sync::signal::Signal::<NoopRawMutex, ()>::new();
+        forever.wait().await;
+    }
+}
+
+#[embassy_executor::task]
+async fn dhcp_task(stack: embassy_net::Stack<'static>) -> ! {
+    let buffers = edge_nal_embassy::UdpBuffers::<2, 1024, 1024, 8>::new();
+    let unbound_socket = edge_nal_embassy::Udp::new(stack, &buffers);
+    let mut bound_socket = loop {
+        match unbound_socket
+            .bind(core::net::SocketAddr::V4(core::net::SocketAddrV4::new(
+                Ipv4Addr::UNSPECIFIED,
+                edge_dhcp::io::DEFAULT_SERVER_PORT,
+            )))
+            .await
+        {
+            Ok(sock) => break sock,
+            Err(_) => {
+                error!("DHCP server: failed to bind socket");
+                Timer::after_secs(5).await;
+                continue;
+            }
+        };
+    };
+
+    let server_ip = Ipv4Addr::new(192, 168, 1, 1);
+
+    let mut server = edge_dhcp::server::Server::<_, 8>::new_with_et(server_ip);
+    let mut gw_buf = [Ipv4Addr::UNSPECIFIED];
+    let options = edge_dhcp::server::ServerOptions::new(server_ip, Some(&mut gw_buf));
+    let mut buf = [0u8; 1024];
+
+    loop {
+        info!("Starting DHCP server");
+        let _ = edge_dhcp::io::server::run(&mut server, &options, &mut bound_socket, &mut buf).await;
+        Timer::after_secs(5).await;
     }
 }

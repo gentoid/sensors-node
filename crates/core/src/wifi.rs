@@ -62,7 +62,7 @@ async fn setup(wifi: &mut esp_radio::wifi::WifiController<'static>, ssid: &'stat
     }
 }
 
-fn print_wifi_error(err: WifiError) {
+pub fn print_wifi_error(err: WifiError) {
     match err {
         esp_radio::wifi::WifiError::NotInitialized => {
             error!("WiFi error: NotInitialized")

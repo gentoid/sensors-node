@@ -61,3 +61,12 @@ sensors_node_core = { path = "../core/", features = ["esp32c6"] }
 smart-leds = { version = "0.4.0" }
 esp-hal-smartled = { version = "0.17.0", features = ["defmt", "esp32c6"] }
 embassy-futures = { version = "0.1.2", features = ["defmt"] }
+heapless-08 = { version = "0.8.0", package = "heapless" }
+# leasehund = { version = "0.2.0" }
+# embassy-net-07 = { version = "0.7", package = "embassy-net" }
+edge-dhcp = { version = "0.7.0" }
+edge-nal = { version = "0.6.0" }
+edge-nal-embassy = { version = "0.8.1", default-features = false, features = [
+  "proto-ipv4",
+  "udp",
+] }

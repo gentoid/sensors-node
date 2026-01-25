@@ -11,11 +11,11 @@ static MQTT_TOPIC_KEY: &'static str = "mqtt.topic";
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Settings {
-    wifi_ssid: String<32>,
-    wifi_password: String<64>,
-    mqtt_broker: String<64>,
-    mqtt_client_id: String<32>,
-    mqtt_topic: String<64>,
+    pub wifi_ssid: String<32>,
+    pub wifi_password: String<64>,
+    pub mqtt_broker: String<64>,
+    pub mqtt_client_id: String<32>,
+    pub mqtt_topic: String<64>,
 }
 
 pub async fn get_initial_settings<'a>(

@@ -15,10 +15,19 @@ pub type DbResult<T> = Result<T, DbError>;
 
 pub static DB: StaticCell<Db> = StaticCell::new();
 
-const FLASH_BASE: usize = 0x600000;
+// const FLASH_BASE: usize = 0x600000;
 
 pub struct EspFlash<T: NorFlash + ReadNorFlash> {
     storage: T,
+    flash_start: usize,
+}
+
+impl <T: NorFlash + ReadNorFlash> EspFlash<T> {
+
+fn page_addr(&self, page_id: ekv::flash::PageID) -> usize {
+    self.flash_start + page_id.index() * ekv::config::PAGE_SIZE
+}
+
 }
 
 impl<T: NorFlash + ReadNorFlash> ekv::flash::Flash for EspFlash<T> {
@@ -29,7 +38,7 @@ impl<T: NorFlash + ReadNorFlash> ekv::flash::Flash for EspFlash<T> {
     }
 
     async fn erase(&mut self, page_id: ekv::flash::PageID) -> Result<(), Self::Error> {
-        let addr = page_addr(page_id);
+        let addr = self.page_addr(page_id);
 
         self.storage
             .erase(addr as u32, (addr + ekv::config::PAGE_SIZE) as u32)
@@ -41,7 +50,7 @@ impl<T: NorFlash + ReadNorFlash> ekv::flash::Flash for EspFlash<T> {
         offset: usize,
         data: &mut [u8],
     ) -> Result<(), Self::Error> {
-        let addr = page_addr(page_id) + offset;
+        let addr = self.page_addr(page_id) + offset;
         self.storage.read(addr as u32, data)
     }
 
@@ -51,13 +60,9 @@ impl<T: NorFlash + ReadNorFlash> ekv::flash::Flash for EspFlash<T> {
         offset: usize,
         data: &[u8],
     ) -> Result<(), Self::Error> {
-        let addr = page_addr(page_id) + offset;
+        let addr = self.page_addr(page_id) + offset;
         self.storage.write(addr as u32, data)
     }
-}
-
-fn page_addr(page_id: ekv::flash::PageID) -> usize {
-    FLASH_BASE + page_id.index() * ekv::config::PAGE_SIZE
 }
 
 pub struct Key(u32);
@@ -201,11 +206,12 @@ impl From<heapless::CapacityError> for DbError {
 //     }
 // }
 
-pub async fn init(flash: esp_hal::peripherals::FLASH<'static>) -> DbResult<&'static mut Db> {
+pub async fn init(flash: esp_hal::peripherals::FLASH<'static>, flash_start: usize) -> DbResult<&'static mut Db> {
     info!("Initializing DB...");
 
     let flash = EspFlash {
         storage: esp_storage::FlashStorage::new(flash),
+        flash_start,
     };
 
     let db = DB.init(Database::new(flash, ekv::Config::default()));

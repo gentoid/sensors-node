@@ -54,7 +54,7 @@ ekv = { version = "1.0.0", features = [
     "erase-value-255",
     "max-page-count-512",
     "scratch-page-count-1",
-    "max-key-size-8",
+    "max-key-size-16",
     "max-value-size-256",
     "max-chunk-size-512",
     "branching-factor-3",
