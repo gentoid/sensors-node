@@ -127,6 +127,11 @@ async fn main(spawner: Spawner) -> ! {
 
     match get_initial_settings(kv_db).await {
         Ok(settings) => {
+            info!("###    WiFi SSID:        {}", settings.wifi_ssid);
+            info!("###    MQTT broker:      {}", settings.mqtt_broker);
+            info!("###    MQTT client id:   {}", settings.mqtt_client_id);
+            info!("###    MQTT topic:       {}", settings.mqtt_topic);
+
             info!("Setting up I2C");
             let i2c = i2c::master::I2c::new(peripherals.I2C0, i2c::master::Config::default())
                 .unwrap()
@@ -240,7 +245,7 @@ async fn init_start(
             break;
         }
     }
-    
+
     spawner.must_spawn(dhcp_task(stack));
 
     info!("Waiting for link...");
