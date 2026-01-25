@@ -228,9 +228,9 @@ pub async fn read_string<'a, const N: usize>(
     key: &str,
 ) -> DbResult<String<N>> {
     let mut buf = [0u8; N];
-    tx.read(key.as_bytes(), &mut buf).await?;
+    let length = tx.read(key.as_bytes(), &mut buf).await?;
 
-    let value = core::str::from_utf8(&buf)?;
+    let value = core::str::from_utf8(&buf[..length])?;
     let value = String::from_str(value)?;
 
     Ok(value)
