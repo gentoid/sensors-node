@@ -1,20 +1,29 @@
 use embassy_net::Stack;
-use heapless::String;
 use picoserve::{
     AppBuilder, AppRouter,
     extract::Form,
-    response::{DebugValue, File},
+    response::{File, Redirect},
 };
-use serde::{Deserialize, Serialize};
+
+use crate::kv_storage;
 
 pub const WEB_TASK_POOL_SIZE: usize = 2;
 
-pub struct App;
+pub struct App {
+    pub db: &'static kv_storage::Db,
+}
+
+impl App {
+    pub fn new(db: &'static kv_storage::Db) -> Self {
+        Self { db }
+    }
+}
 
 impl picoserve::AppBuilder for App {
     type PathRouter = impl picoserve::routing::PathRouter;
 
     fn build_app(self) -> picoserve::Router<Self::PathRouter> {
+        let db = self.db;
         picoserve::Router::new()
             .route(
                 "/",
@@ -24,9 +33,10 @@ impl picoserve::AppBuilder for App {
             )
             .route(
                 "/save",
-                picoserve::routing::post(
-                    |Form(data): Form<Settings>| async move { DebugValue(data) },
-                ),
+                picoserve::routing::post(move |Form(data): Form<crate::config::Settings>| async move {
+                    let _ = crate::config::save_settings(db, &data).await;
+                    Redirect::to("/")
+                }),
             )
     }
 }
@@ -36,9 +46,9 @@ pub struct WebApp {
     pub config: &'static picoserve::Config,
 }
 
-impl Default for WebApp {
-    fn default() -> Self {
-        let router = picoserve::make_static!(AppRouter<App>, App.build_app());
+impl WebApp {
+    pub fn new(db: &'static mut kv_storage::Db) -> Self {
+        let router = picoserve::make_static!(AppRouter<App>, App::new(db).build_app());
 
         let config = picoserve::make_static!(
             picoserve::Config,
@@ -47,15 +57,6 @@ impl Default for WebApp {
 
         Self { router, config }
     }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct Settings {
-    wifi_ssid: String<32>,
-    wifi_password: String<32>,
-    mqtt_broker: String<32>,
-    mqtt_client_id: String<32>,
-    mqtt_topic: String<32>,
 }
 
 #[embassy_executor::task(pool_size = WEB_TASK_POOL_SIZE)]

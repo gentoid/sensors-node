@@ -3,11 +3,12 @@
 
 pub mod air_quality;
 pub mod ble;
+pub mod config;
+pub mod kv_storage;
 pub mod led;
 pub mod mqtt;
 pub mod net_time;
 pub mod sensors;
-pub mod storage;
 pub mod system;
 pub mod web;
 pub mod wifi;

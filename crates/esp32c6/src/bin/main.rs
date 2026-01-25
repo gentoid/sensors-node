@@ -7,7 +7,7 @@
 )]
 #![deny(clippy::large_stack_frames)]
 
-use defmt::info;
+use defmt::{info, warn};
 use embassy_executor::Spawner;
 use embassy_futures::select;
 use embassy_net::StackResources;
@@ -22,7 +22,7 @@ use esp_hal_smartled::{SmartLedsAdapter, smart_led_buffer};
 use esp_radio::{ble::controller::BleConnector, wifi};
 use esp_rtos::main;
 use panic_rtt_target as _;
-use sensors_node_core::{ble, led, net_time, system, web};
+use sensors_node_core::{ble, led, net_time, system, web, kv_storage};
 use static_cell::StaticCell;
 
 extern crate alloc;
@@ -103,12 +103,12 @@ async fn main(spawner: Spawner) -> ! {
 
     spawner.must_spawn(ble::task(ble_controller));
 
-    // let mut db: Option<&'static mut storage::MutexDb> = None;
+    
 
-    // match storage::init(peripherals.FLASH).await {
-    //     Ok(db_proxy) => db = Some(db_proxy),
-    //     Err(err) => warn!("Couldn't initialize storage. It won't be available. Error: {}", err),
-    // }
+    let mut kv_db = match kv_storage::init(peripherals.FLASH).await {
+        Ok(db) => db,
+        Err(err) => panic!("Couldn't initialize storage. It won't be available. Error: {:?}", err),
+    };
 
     const WIFI_SSID: &'static str = env!("WIFI_SSID");
     const WIFI_PASSWORD: &'static str = env!("WIFI_PASSWORD");
@@ -149,7 +149,7 @@ async fn main(spawner: Spawner) -> ! {
     info!("Starting up web-server");
     let web_app = {
         static WEB_APP_STATIC: StaticCell<web::WebApp> = StaticCell::new();
-        WEB_APP_STATIC.init(web::WebApp::default())
+        WEB_APP_STATIC.init(web::WebApp::new(kv_db))
     };
 
     for task_id in 0..web::WEB_TASK_POOL_SIZE {
