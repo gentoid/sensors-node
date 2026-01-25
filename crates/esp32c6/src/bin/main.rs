@@ -296,7 +296,8 @@ async fn dhcp_task(stack: embassy_net::Stack<'static>) -> ! {
 
     loop {
         info!("Starting DHCP server");
-        let _ = edge_dhcp::io::server::run(&mut server, &options, &mut bound_socket, &mut buf).await;
+        let _ =
+            edge_dhcp::io::server::run(&mut server, &options, &mut bound_socket, &mut buf).await;
         Timer::after_secs(5).await;
     }
 }

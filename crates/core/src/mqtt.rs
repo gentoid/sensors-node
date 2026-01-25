@@ -16,7 +16,7 @@ use rust_mqtt::{
     types::{MqttString, QoS, TopicName},
 };
 
-use crate::{sensors,  wifi};
+use crate::{sensors, wifi};
 
 pub static READY: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 pub static DOWN: Signal<CriticalSectionRawMutex, ()> = Signal::new();
@@ -114,17 +114,39 @@ pub async fn task(stack: Stack<'static>, client_id: &'static str, topic: &'stati
                     let mut payload = String::<256>::new();
 
                     write!(payload, "{{\"ts\":{}", sample.timestamp).ok();
-                    sample.temperature.inspect(|value| {write!(payload, ",\"temperature\":{}", value).ok();});
-                    sample.pressure.inspect(|value| {write!(payload, ",\"pressure\":{}", value).ok();});
-                    sample.humidity.inspect(|value| {write!(payload, ",\"humidity\":{}", value).ok();});
-                    sample.gas_ohm.inspect(|value| {write!(payload, ",\"gas_ohm\":{}", value).ok();});
-                    sample.lux_bh1750.inspect(|value| {write!(payload, ",\"lux_bh1750\":{}", value).ok();});
-                    sample.lux_veml7700.inspect(|value| {write!(payload, ",\"lux_veml7700\":{}", value).ok();});
-                    sample.temp_bmp390.inspect(|value| {write!(payload, ",\"temp_bmp390\":{}", value).ok();});
-                    sample.press_bmp390.inspect(|value| {write!(payload, ",\"press_bmp390\":{}", value).ok();});
-                    sample.hum_sht40.inspect(|value| {write!(payload, ",\"hum_sht40\":{}", value).ok();});
-                    sample.temp_sht40.inspect(|value| {write!(payload, ",\"temp_sht40\":{}", value).ok();});
-                    sample.aiq_score.inspect(|value| {write!(payload, ",\"aiq_score\":{}", value).ok();});
+                    sample.temperature.inspect(|value| {
+                        write!(payload, ",\"temperature\":{}", value).ok();
+                    });
+                    sample.pressure.inspect(|value| {
+                        write!(payload, ",\"pressure\":{}", value).ok();
+                    });
+                    sample.humidity.inspect(|value| {
+                        write!(payload, ",\"humidity\":{}", value).ok();
+                    });
+                    sample.gas_ohm.inspect(|value| {
+                        write!(payload, ",\"gas_ohm\":{}", value).ok();
+                    });
+                    sample.lux_bh1750.inspect(|value| {
+                        write!(payload, ",\"lux_bh1750\":{}", value).ok();
+                    });
+                    sample.lux_veml7700.inspect(|value| {
+                        write!(payload, ",\"lux_veml7700\":{}", value).ok();
+                    });
+                    sample.temp_bmp390.inspect(|value| {
+                        write!(payload, ",\"temp_bmp390\":{}", value).ok();
+                    });
+                    sample.press_bmp390.inspect(|value| {
+                        write!(payload, ",\"press_bmp390\":{}", value).ok();
+                    });
+                    sample.hum_sht40.inspect(|value| {
+                        write!(payload, ",\"hum_sht40\":{}", value).ok();
+                    });
+                    sample.temp_sht40.inspect(|value| {
+                        write!(payload, ",\"temp_sht40\":{}", value).ok();
+                    });
+                    sample.aiq_score.inspect(|value| {
+                        write!(payload, ",\"aiq_score\":{}", value).ok();
+                    });
                     write!(payload, "}}").ok();
 
                     if let Err(err) = mqtt_client
