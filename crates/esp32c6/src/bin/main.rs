@@ -45,7 +45,7 @@ extern crate alloc;
 esp_bootloader_esp_idf::esp_app_desc!();
 
 static RADIO: StaticCell<esp_radio::Controller<'static>> = StaticCell::new();
-static RESOURCES: StaticCell<StackResources<8>> = StaticCell::new();
+static RESOURCES: StaticCell<StackResources<16>> = StaticCell::new();
 static FLASH_KV_START: usize = 0x600_000;
 
 #[embassy_executor::task]
@@ -242,6 +242,14 @@ async fn init_start(
     }
     
     spawner.must_spawn(dhcp_task(stack));
+
+    info!("Waiting for link...");
+    stack.wait_link_up().await;
+    info!("  Link is up!");
+
+    info!("Waiting for DHCP...");
+    stack.wait_config_up().await;
+    info!("  IPv4 config: {:?}", stack.config_v4());
 
     for task_id in 0..web::WEB_TASK_POOL_SIZE {
         spawner.must_spawn(web::task(task_id, stack, web_app.router, web_app.config));

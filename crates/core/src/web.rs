@@ -1,3 +1,4 @@
+use defmt::Debug2Format;
 use embassy_net::Stack;
 use picoserve::{
     AppBuilder, AppRouter,
@@ -34,8 +35,17 @@ impl picoserve::AppBuilder for App {
             .route(
                 "/save",
                 picoserve::routing::post(move |Form(data): Form<crate::config::Settings>| async move {
-                    let _ = crate::config::save_settings(db, &data).await;
-                    Redirect::to("/")
+                    match crate::config::save_settings(db, &data).await {
+                        Err(err) => {
+                            defmt::error!("Saving error: {}", err);
+                            Debug2Format(&data);
+                        },
+                        Ok(_) => {
+                            defmt::info!("Saved!");
+                            Debug2Format("Saved!");
+                            // Redirect::to("/")
+                        }
+                    }    
                 }),
             )
     }
