@@ -18,8 +18,8 @@ pub struct Settings {
     mqtt_topic: String<64>,
 }
 
-pub async fn get_initial_settings(
-    db: &'static mut kv_storage::Db,
+pub async fn get_initial_settings<'a>(
+    db: &'static kv_storage::Db,
 ) -> kv_storage::DbResult<Settings> {
     let mut tx = db.read_transaction().await;
 

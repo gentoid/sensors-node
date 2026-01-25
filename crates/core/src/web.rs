@@ -47,7 +47,7 @@ pub struct WebApp {
 }
 
 impl WebApp {
-    pub fn new(db: &'static mut kv_storage::Db) -> Self {
+    pub fn new(db: &'static kv_storage::Db) -> Self {
         let router = picoserve::make_static!(AppRouter<App>, App::new(db).build_app());
 
         let config = picoserve::make_static!(
