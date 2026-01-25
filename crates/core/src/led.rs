@@ -1,7 +1,10 @@
 use embassy_time::Timer;
 use esp_hal_smartled::SmartLedsAdapter;
 use rgb::Grb;
-use smart_leds::RGB8;
+use smart_leds::{
+    RGB8, brightness, gamma,
+    hsv::{Hsv, hsv2rgb},
+};
 
 use crate::system;
 
@@ -10,7 +13,7 @@ where
     L: smart_leds::SmartLedsWrite<Color = Grb<u8>>,
 {
     led: L,
-    buf: [RGB8; 1],
+    brightness: u8,
 }
 
 impl<L> Status<L>
@@ -20,7 +23,7 @@ where
     pub fn new(led: L) -> Self {
         Self {
             led,
-            buf: [RGB8::default()],
+            brightness: 10,
         }
     }
 
@@ -29,8 +32,14 @@ where
     }
 
     pub fn set(&mut self, r: u8, g: u8, b: u8) {
-        self.buf[0] = RGB8 { r, g, b };
-        let _ = self.led.write(self.buf.iter().copied());
+        let rgb = RGB8 { r, g, b };
+        let _ = self.led.write([rgb].into_iter());
+    }
+
+    pub fn set_hsv(&mut self, hsv: Hsv) {
+        let rgb = hsv2rgb(hsv);
+        let rgb = brightness(gamma([rgb].into_iter()), self.brightness);
+        self.led.write(rgb).ok();
     }
 }
 
@@ -111,10 +120,17 @@ fn set_led<const BUFFER_SIZE: usize>(
 async fn pattern_connecting<const BUFFER_SIZE: usize>(
     led: &mut Status<SmartLedsAdapter<'_, BUFFER_SIZE>>,
 ) -> ! {
+    let mut color = Hsv {
+        hue: 0,
+        sat: 255,
+        val: 255,
+    };
+
     loop {
-        for i in 0u8..255 {
-            led.set((i.wrapping_mul(2)).min(u8::MAX) / 6, i / 6, i / 24);
-            Timer::after_millis(20).await;
+        for hue in 0u8..=255 {
+            color.hue = hue;
+            led.set_hsv(color);
+            Timer::after_millis(10).await;
         }
     }
 }
