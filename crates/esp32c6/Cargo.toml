@@ -70,3 +70,7 @@ edge-nal-embassy = { version = "0.8.1", default-features = false, features = [
   "proto-ipv4",
   "udp",
 ] }
+
+ssd1306 = { version = "0.10.0" }
+embassy-embedded-hal = { version = "0.5.0", features = ["defmt", "time"] }
+embedded-graphics = { version = "*", features = ["defmt"] }
