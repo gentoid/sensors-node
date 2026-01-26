@@ -256,6 +256,8 @@ async fn init_start(
     stack.wait_config_up().await;
     info!("  IPv4 config: {:?}", stack.config_v4());
 
+    spawner.must_spawn(system::reboot_on_request());
+
     for task_id in 0..web::WEB_TASK_POOL_SIZE {
         spawner.must_spawn(web::task(task_id, stack, web_app.router, web_app.config));
     }

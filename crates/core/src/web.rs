@@ -1,3 +1,5 @@
+use core::sync::atomic::Ordering;
+
 use defmt::Debug2Format;
 use embassy_net::Stack;
 use picoserve::{
@@ -43,6 +45,7 @@ impl picoserve::AppBuilder for App {
                         Ok(_) => {
                             defmt::info!("Saved!");
                             Debug2Format("Saved!");
+                            crate::system::NEED_REBOOT.store(true, Ordering::SeqCst);
                             // Redirect::to("/")
                         }
                     }    
