@@ -5,7 +5,7 @@ use bme680::{Bme680, I2CAddress, IIRFilterSize, PowerMode, SettingsBuilder};
 use defmt::{error, info, warn};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex, signal::Signal};
 use embassy_time::{Duration, Instant, Timer};
-use embedded_hal_bus::i2c::RefCellDevice;
+pub use embedded_hal_bus::i2c::RefCellDevice;
 use esp_hal::{Async, delay::Delay, i2c};
 use heapless::spsc::Queue;
 use serde::{Deserialize, Serialize};
@@ -40,47 +40,45 @@ pub struct Sample {
     pub aiq_score: Option<u32>,
 }
 
-type I2C<'a> = i2c::master::I2c<'a, Async>;
+pub type I2C<'a> = i2c::master::I2c<'a, Async>;
 type RefCellDevI2C<'a> = RefCellDevice<'a, I2C<'a>>;
 
 #[embassy_executor::task]
-pub async fn task(i2c: I2C<'static>) -> ! {
-    let refcell_i2c = RefCell::new(i2c);
-
+pub async fn task(i2c: &'static RefCell<I2C<'static>>) -> ! {
     Timer::after(Duration::from_secs(1)).await;
 
-    let mut veml = if check_i2c_address(&refcell_i2c, 0x10).await {
+    let mut veml = if check_i2c_address(&i2c, 0x10).await {
         info!("I2C: VEML7700 detected");
-        create_veml7700(&refcell_i2c)
+        create_veml7700(&i2c)
     } else {
         None
     };
-    
-    // Timer::after(Duration::from_secs(1)).await;
-
-    let mut sht40 = create_sht40(&refcell_i2c);
 
     // Timer::after(Duration::from_secs(1)).await;
 
-    let mut bme680 = if check_i2c_address(&refcell_i2c, 0x76).await {
+    let mut sht40 = create_sht40(&i2c);
+
+    // Timer::after(Duration::from_secs(1)).await;
+
+    let mut bme680 = if check_i2c_address(&i2c, 0x76).await {
         info!("I2C: BME680 detected");
-        create_bme680(&refcell_i2c)
+        create_bme680(&i2c)
     } else {
         None
     };
 
     // Timer::after(Duration::from_secs(1)).await;
 
-    let mut bh1750 = if check_i2c_address(&refcell_i2c, 0x23).await {
+    let mut bh1750 = if check_i2c_address(&i2c, 0x23).await {
         info!("I2C: BH1750 detected");
-        create_bh1750(&refcell_i2c)
+        create_bh1750(&i2c)
     } else {
         None
     };
 
     // Timer::after(Duration::from_secs(1)).await;
 
-    let mut bmp390 = create_bmp390(&refcell_i2c);
+    let mut bmp390 = create_bmp390(&i2c);
 
     // Timer::after(Duration::from_secs(1)).await;
 

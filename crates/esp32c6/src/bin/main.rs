@@ -7,6 +7,7 @@
 )]
 #![deny(clippy::large_stack_frames)]
 
+use core::cell::RefCell;
 use core::net::Ipv4Addr;
 
 use defmt::{error, info};
@@ -30,6 +31,7 @@ use esp_radio::{
 };
 use esp_rtos::main;
 use panic_rtt_target as _;
+use sensors_node_core::sensors;
 use sensors_node_core::wifi::print_wifi_error;
 use sensors_node_core::{
     ble,
@@ -103,6 +105,18 @@ async fn main(spawner: Spawner) -> ! {
     spawner.must_spawn(led_task());
     system::set_state(system::State::Booting);
 
+    info!("Setting up I2C");
+    let i2c = i2c::master::I2c::new(peripherals.I2C0, i2c::master::Config::default())
+        .unwrap()
+        .with_sda(peripherals.GPIO0)
+        .with_scl(peripherals.GPIO1)
+        .into_async();
+
+    let i2c: &'static RefCell<sensors::I2C> = {
+        static I2C_STATIC: StaticCell<RefCell<sensors::I2C>> = StaticCell::new();
+        I2C_STATIC.init(RefCell::new(i2c))
+    };
+
     let radio_init =
         RADIO.init(esp_radio::init().expect("Failed to initialize Wi-Fi/BLE controller"));
 
@@ -132,14 +146,7 @@ async fn main(spawner: Spawner) -> ! {
             info!("###    MQTT client id:   {}", settings.mqtt_client_id);
             info!("###    MQTT topic:       {}", settings.mqtt_topic);
 
-            info!("Setting up I2C");
-            let i2c = i2c::master::I2c::new(peripherals.I2C0, i2c::master::Config::default())
-                .unwrap()
-                .with_sda(peripherals.GPIO0)
-                .with_scl(peripherals.GPIO1)
-                .into_async();
-
-            run(spawner, wifi_controller, interfaces.sta, i2c, settings).await
+            run(spawner, wifi_controller, interfaces.sta, &i2c, settings).await
         }
         Err(err) => {
             info!("Could not get initial settings: {}", err);
@@ -148,11 +155,26 @@ async fn main(spawner: Spawner) -> ! {
     }
 }
 
+#[embassy_executor::task]
+async fn display_values(i2c: &'static RefCell<sensors::I2C<'static>>) {
+    let interface = ssd1306::I2CDisplayInterface::new(sensors::RefCellDevice::new(i2c));
+    let mut display = ssd1306::Ssd1306::new(interface, DisplaySize128x32, DisplayRotation::Rotate0)
+        .into_terminal_mode();
+    display.init().unwrap();
+
+    for ch in "hello".chars() {
+        if let Err(_) = display.print_char(ch) {
+            error!("Error printing char");
+        };
+        Timer::after_secs(2).await;
+    }
+}
+
 async fn run(
     spawner: Spawner,
     wifi_controller: WifiController<'static>,
     device: WifiDevice<'static>,
-    i2c: i2c::master::I2c<'static, Async>,
+    i2c: &'static RefCell<sensors::I2C<'static>>,
     settings: Settings,
 ) -> ! {
     let settings = {
