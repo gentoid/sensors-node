@@ -1,20 +1,13 @@
 use core::fmt::Write;
-use defmt::{info, warn};
+use defmt::{Debug2Format, info, warn};
 use embassy_futures::select::{Either3, select3};
 use embassy_net::{Stack, tcp};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
 use embassy_time::{Duration, Ticker, Timer};
 use heapless::String;
-use rust_mqtt::{
-    Bytes,
-    buffer::AllocBuffer,
-    client::{
-        Client,
-        options::{ConnectOptions, PublicationOptions},
-    },
-    config::{KeepAlive, SessionExpiryInterval},
-    types::{MqttString, QoS, TopicName},
-};
+
+use mqtt_client::packet::QoS;
+use mqtt_client::{ConnectOptions, Event, PublishMsg};
 
 use crate::{sensors, wifi};
 
@@ -27,11 +20,9 @@ pub async fn task(stack: Stack<'static>, client_id: &'static str, topic: &'stati
 
     let broker_addr = smoltcp::wire::IpAddress::v4(192, 168, 1, 11);
     let broker_port = 1883;
+    let keep_alive_secs: u16 = 120;
 
     let mut backoff = 1u64;
-
-    let client_id = Some(MqttString::from_slice(client_id).unwrap());
-    let topic = unsafe { TopicName::new_unchecked(MqttString::from_slice(topic).unwrap()) };
 
     loop {
         info!("MQTT: waiting for WiFi...");
@@ -53,25 +44,52 @@ pub async fn task(stack: Stack<'static>, client_id: &'static str, topic: &'stati
 
         info!("MQTT: TCP connected. Connecting to broker...");
 
-        let mut buffer = AllocBuffer;
-        let mut mqtt_client: Client<'_, tcp::TcpSocket<'_>, AllocBuffer, 4, 4, 4> =
-            Client::new(&mut buffer);
-
         let options = ConnectOptions {
-            clean_start: true,
-            keep_alive: KeepAlive::Seconds(120),
+            clean_session: true,
+            client_id,
+            keep_alive: keep_alive_secs,
             password: None,
-            session_expiry_interval: SessionExpiryInterval::default(),
-            user_name: None,
+            username: None,
             will: None,
         };
 
-        if let Err(err) = mqtt_client
-            .connect(tcp_socket, &options, client_id.clone())
-            .await
-        {
-            warn!("MQTT: connect failed: {}", err);
-            mqtt_client.abort().await;
+        let mut rx_buf = &mut [0u8; 1024];
+        let mut tx_buf = &mut [0u8; 1024];
+
+        let clock = mqtt_client::time::EmbassyClock::default();
+        let keep_alive = mqtt_client::time::KeepAlive::from_sec(keep_alive_secs as u64);
+
+        let mut mqtt_client = mqtt_client::Client::<_, _, 1, 4, 1, 4>::try_new(
+            clock, keep_alive, tcp_socket, rx_buf, tx_buf,
+        )
+        .unwrap();
+
+        if let Err(err) = mqtt_client.schedule_connect(options) {
+            warn!("MQTT: connect failed: {:?}", Debug2Format(&err));
+            Timer::after_secs(backoff).await;
+            backoff = (backoff * 2).min(30);
+            continue;
+        }
+
+        let mut connected = false;
+        while !connected {
+            match mqtt_client.poll().await {
+                Ok(Some(Event::Connected)) => {
+                    connected = true;
+                }
+                Ok(Some(Event::Disconnected)) => {
+                    warn!("MQTT: disconnected during connect");
+                    break;
+                }
+                Ok(Some(_)) | Ok(None) => {}
+                Err(err) => {
+                    warn!("MQTT: connect poll error: {:?}", Debug2Format(&err));
+                    break;
+                }
+            }
+        }
+
+        if !connected {
             Timer::after_secs(backoff).await;
             backoff = (backoff * 2).min(30);
             continue;
@@ -81,26 +99,44 @@ pub async fn task(stack: Stack<'static>, client_id: &'static str, topic: &'stati
         READY.signal(());
         backoff = 1;
 
-        let mut ticker = Ticker::every(Duration::from_secs(90));
+        let tick_secs = (keep_alive_secs as u64 / 2).max(1);
+        let mut ticker = Ticker::every(Duration::from_secs(tick_secs));
 
         loop {
             match select3(sensors::HAS_DATA.wait(), ticker.next(), mqtt_client.poll()).await {
                 Either3::First(_) => {}
-                Either3::Second(_) => {
-                    info!("keep alive ping");
-                    if let Err(err) = mqtt_client.ping().await {
-                        warn!("MQTT ping error: {}", err);
-                        DOWN.signal(());
-                        break;
-                    }
-                }
+                Either3::Second(_) => {}
                 Either3::Third(poll) => match poll {
-                    Ok(resp) => {
-                        info!("Poll response: {}", resp);
+                    Ok(Some(event)) => {
+                        match event {
+                            Event::Disconnected => {
+                                warn!("MQTT: disconnected");
+                                DOWN.signal(());
+                                break;
+                            }
+                            Event::Received(_) => {
+                                info!("MQTT: message received");
+                            }
+                            Event::Published => {
+                                info!("MQTT: published");
+                            }
+                            Event::Subscribed => {
+                                info!("MQTT: subscribed");
+                            }
+                            Event::SubscribeFailed => {
+                                warn!("MQTT: subscribe failed");
+                            }
+                            Event::Unsubscribed => {
+                                info!("MQTT: unsubscribed");
+                            }
+                            Event::Connected => {}
+                        }
+
                         ticker.reset();
                     }
+                    Ok(None) => {}
                     Err(err) => {
-                        warn!("MQTT poll error: {}", err);
+                        warn!("MQTT poll error: {:?}", Debug2Format(&err));
                         DOWN.signal(());
                         break;
                     }
@@ -149,18 +185,20 @@ pub async fn task(stack: Stack<'static>, client_id: &'static str, topic: &'stati
                     });
                     write!(payload, "}}").ok();
 
-                    if let Err(err) = mqtt_client
-                        .publish(
-                            &PublicationOptions {
-                                qos: QoS::AtLeastOnce,
-                                retain: false,
-                                topic: topic.clone(),
-                            },
-                            Bytes::Borrowed(payload.as_bytes()),
-                        )
-                        .await
-                    {
-                        warn!("MQTT: publish failed: {}", err);
+                    let publish_result = mqtt_client.schedule_publish(PublishMsg {
+                        qos: QoS::AtLeastOnce,
+                        retain: false,
+                        topic,
+                        payload: payload.as_bytes(),
+                    });
+
+                    let publish_result = match publish_result {
+                        Ok(()) => mqtt_client.poll_io().await,
+                        Err(err) => Err(err),
+                    };
+
+                    if let Err(err) = publish_result {
+                        warn!("MQTT: publish failed: {:?}", Debug2Format(&err));
 
                         let stored = {
                             // if let Some(db) = db.as_mut() {

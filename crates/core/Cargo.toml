@@ -46,7 +46,7 @@ bh1750 = "*"
 bme680 = { git = "https://github.com/marcelbuesing/bme680", rev = "838d1eaeb14be76a8d325eafd7e0896299aa9e68" }
 embedded-hal-bus = "0.3.0"
 
-rust-mqtt = { version = "*", features = ["v5", "defmt"] }
+mqtt-client = { path = "../../../../_mqtt/mqtt-client", features = ["embassy"] }
 embassy-sync = { version = "0.7.2", features = ["defmt"] }
 embassy-futures = { version = "0.1.2", features = ["defmt"] }
 ekv = { version = "1.0.0", features = [
