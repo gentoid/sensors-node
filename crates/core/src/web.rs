@@ -1,20 +1,24 @@
 use core::sync::atomic::Ordering;
-
 use defmt::Debug2Format;
 use embassy_net::Stack;
 use picoserve::{AppBuilder, AppRouter, extract::Form, response::File};
+use static_cell::StaticCell;
 
-use crate::kv_storage;
+use crate::{config::Settings, kv_storage};
+
+extern crate alloc;
 
 pub const WEB_TASK_POOL_SIZE: usize = 2;
+static INDEX_PAGE: StaticCell<alloc::string::String> = StaticCell::new();
 
 pub struct App {
     pub db: &'static kv_storage::Db,
+    settings: Option<Settings>,
 }
 
 impl App {
-    pub fn new(db: &'static kv_storage::Db) -> Self {
-        Self { db }
+    pub fn new(db: &'static kv_storage::Db, settings: Option<Settings>) -> Self {
+        Self { db, settings }
     }
 }
 
@@ -23,13 +27,21 @@ impl picoserve::AppBuilder for App {
 
     fn build_app(self) -> picoserve::Router<Self::PathRouter> {
         let db = self.db;
+        let template = include_str!("../../../html/index.html");
+        let default_settings = Settings::default();
+        let settings = self.settings.as_ref().unwrap_or(&default_settings);
+
+        let index_page = template
+            .replace("%_wifi_ssid_%", &settings.wifi_ssid)
+            .replace("%_wifi_password_%", &settings.wifi_password)
+            .replace("%_mqtt_broker_%", &settings.mqtt_broker)
+            .replace("%_mqtt_client_id_%", &settings.mqtt_client_id)
+            .replace("%_mqtt_topic_%", &settings.mqtt_topic);
+
+        let page: &'static str = INDEX_PAGE.init(index_page).as_str();
+
         picoserve::Router::new()
-            .route(
-                "/",
-                picoserve::routing::get_service(File::html(include_str!(
-                    "../../../html/index.html"
-                ))),
-            )
+            .route("/", picoserve::routing::get_service(File::html(&page)))
             .route(
                 "/save",
                 picoserve::routing::post(
@@ -57,8 +69,8 @@ pub struct WebApp {
 }
 
 impl WebApp {
-    pub fn new(db: &'static kv_storage::Db) -> Self {
-        let router = picoserve::make_static!(AppRouter<App>, App::new(db).build_app());
+    pub fn new(db: &'static kv_storage::Db, settings: Option<Settings>) -> Self {
+        let router = picoserve::make_static!(AppRouter<App>, App::new(db, settings).build_app());
 
         let config = picoserve::make_static!(
             picoserve::Config,

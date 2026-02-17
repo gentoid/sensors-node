@@ -9,7 +9,7 @@ static MQTT_BROKER_KEY: &'static str = "mqtt.broker";
 static MQTT_CLIENT_ID_KEY: &'static str = "mqtt.client_id";
 static MQTT_TOPIC_KEY: &'static str = "mqtt.topic";
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct Settings {
     pub wifi_ssid: String<32>,
     pub wifi_password: String<64>,

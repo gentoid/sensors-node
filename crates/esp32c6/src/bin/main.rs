@@ -153,12 +153,15 @@ async fn main(spawner: Spawner) -> ! {
             info!("###    MQTT broker:      {}", settings.mqtt_broker);
             info!("###    MQTT client id:   {}", settings.mqtt_client_id);
             info!("###    MQTT topic:       {}", settings.mqtt_topic);
+            
+            // init_start(spawner, wifi_controller, interfaces.ap, kv_db, settings).await
 
             run(spawner, wifi_controller, interfaces.sta, &i2c, settings).await
         }
         Err(err) => {
             info!("Could not get initial settings: {}", err);
-            init_start(spawner, wifi_controller, interfaces.ap, kv_db).await
+            unreachable!();
+            // init_start(spawner, wifi_controller, interfaces.ap, kv_db).await
         }
     }
 }
@@ -256,11 +259,12 @@ async fn init_start(
     mut wifi_controller: WifiController<'static>,
     device: WifiDevice<'static>,
     kv_db: &'static kv_storage::Db,
+    settings: Settings,
 ) -> ! {
     info!("Starting up web-server");
     let web_app = {
         static WEB_APP_STATIC: StaticCell<web::WebApp> = StaticCell::new();
-        WEB_APP_STATIC.init(web::WebApp::new(kv_db))
+        WEB_APP_STATIC.init(web::WebApp::new(kv_db, Some(settings)))
     };
 
     let net_config = embassy_net::Config::ipv4_static(embassy_net::StaticConfigV4 {

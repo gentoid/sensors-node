@@ -18,25 +18,25 @@
         <!-- Wi-Fi Settings -->
         <div>
             <label>Wi-Fi SSID:</label>
-            <input type="text" name="wifi_ssid" placeholder="Home_Network">
+            <input type="text" name="wifi_ssid" placeholder="Home_Network" value="%_wifi_ssid_%">
         </div>
         <div>
             <label>Wi-Fi Password:</label>
-            <input type="password" name="wifi_password" placeholder="Password">
+            <input type="password" name="wifi_password" placeholder="Password" value="%_wifi_password_%">
         </div>
         
         <!-- Cloud/Server Settings -->
         <div>
             <label>MQTT Broker URL:</label>
-            <input type="text" name="mqtt_broker" placeholder="broker.host.com">
+            <input type="text" name="mqtt_broker" placeholder="broker.host.com" value="%_mqtt_broker_%">
         </div>
         <div>
             <label>MQTT client id:</label>
-            <input type="text" name="mqtt_client_id" placeholder="unique-id-123">
+            <input type="text" name="mqtt_client_id" placeholder="unique-id-123" value="%_mqtt_client_id_%">
         </div>
         <div>
             <label>Publish topic:</label>
-            <input type="text" name="mqtt_topic" placeholder="sensors/living_room/my_device/temperature">
+            <input type="text" name="mqtt_topic" placeholder="sensors/living_room/my_device/temperature" value="%_mqtt_topic_%">
         </div>
         
         <button type="submit">Save & Reboot</button>
