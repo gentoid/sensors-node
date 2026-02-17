@@ -21,12 +21,12 @@ use embedded_graphics::mono_font::{self, MonoTextStyleBuilder};
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::prelude::Point;
 use embedded_graphics::{Drawable, text};
+use esp_hal::clock::CpuClock;
 use esp_hal::i2c;
 use esp_hal::peripherals::Peripherals;
 use esp_hal::rmt::Rmt;
 use esp_hal::time::Rate;
 use esp_hal::timer::timg::TimerGroup;
-use esp_hal::{Async, clock::CpuClock};
 use esp_hal_smartled::{SmartLedsAdapter, smart_led_buffer};
 use esp_radio::wifi::AccessPointConfig;
 use esp_radio::{

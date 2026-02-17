@@ -2,11 +2,7 @@ use core::sync::atomic::Ordering;
 
 use defmt::Debug2Format;
 use embassy_net::Stack;
-use picoserve::{
-    AppBuilder, AppRouter,
-    extract::Form,
-    response::{File, Redirect},
-};
+use picoserve::{AppBuilder, AppRouter, extract::Form, response::File};
 
 use crate::kv_storage;
 
@@ -36,20 +32,21 @@ impl picoserve::AppBuilder for App {
             )
             .route(
                 "/save",
-                picoserve::routing::post(move |Form(data): Form<crate::config::Settings>| async move {
-                    match crate::config::save_settings(db, &data).await {
-                        Err(err) => {
-                            defmt::error!("Saving error: {}", err);
-                            Debug2Format(&data);
-                        },
-                        Ok(_) => {
-                            defmt::info!("Saved!");
-                            Debug2Format("Saved!");
-                            crate::system::NEED_REBOOT.store(true, Ordering::SeqCst);
-                            // Redirect::to("/")
+                picoserve::routing::post(
+                    move |Form(data): Form<crate::config::Settings>| async move {
+                        match crate::config::save_settings(db, &data).await {
+                            Err(err) => {
+                                defmt::error!("Saving error: {}", err);
+                                Debug2Format(&data);
+                            }
+                            Ok(_) => {
+                                defmt::info!("Saved!");
+                                crate::system::NEED_REBOOT.store(true, Ordering::SeqCst);
+                                // Redirect::to("/")
+                            }
                         }
-                    }    
-                }),
+                    },
+                ),
             )
     }
 }
