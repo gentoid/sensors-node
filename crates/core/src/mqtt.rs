@@ -147,43 +147,7 @@ pub async fn task(stack: Stack<'static>, client_id: &'static str, topic: &'stati
                 let sample = { sensors::QUEUE.lock().await.dequeue() };
 
                 if let Some(sample) = sample {
-                    let mut payload = String::<256>::new();
-
-                    write!(payload, "{{\"ts\":{}", sample.timestamp).ok();
-                    sample.temperature.inspect(|value| {
-                        write!(payload, ",\"temperature\":{}", value).ok();
-                    });
-                    sample.pressure.inspect(|value| {
-                        write!(payload, ",\"pressure\":{}", value).ok();
-                    });
-                    sample.humidity.inspect(|value| {
-                        write!(payload, ",\"humidity\":{}", value).ok();
-                    });
-                    sample.gas_ohm.inspect(|value| {
-                        write!(payload, ",\"gas_ohm\":{}", value).ok();
-                    });
-                    sample.lux_bh1750.inspect(|value| {
-                        write!(payload, ",\"lux_bh1750\":{}", value).ok();
-                    });
-                    sample.lux_veml7700.inspect(|value| {
-                        write!(payload, ",\"lux_veml7700\":{}", value).ok();
-                    });
-                    sample.temp_bmp390.inspect(|value| {
-                        write!(payload, ",\"temp_bmp390\":{}", value).ok();
-                    });
-                    sample.press_bmp390.inspect(|value| {
-                        write!(payload, ",\"press_bmp390\":{}", value).ok();
-                    });
-                    sample.hum_sht40.inspect(|value| {
-                        write!(payload, ",\"hum_sht40\":{}", value).ok();
-                    });
-                    sample.temp_sht40.inspect(|value| {
-                        write!(payload, ",\"temp_sht40\":{}", value).ok();
-                    });
-                    sample.aiq_score.inspect(|value| {
-                        write!(payload, ",\"aiq_score\":{}", value).ok();
-                    });
-                    write!(payload, "}}").ok();
+                    let payload = build_payload(&sample);
 
                     let publish_result = mqtt_client.schedule_publish(PublishMsg {
                         qos: QoS::AtLeastOnce,
@@ -238,4 +202,46 @@ pub async fn task(stack: Stack<'static>, client_id: &'static str, topic: &'stati
 
         info!("MQTT disconnected, retrying...");
     }
+}
+
+fn build_payload(sample: &sensors::Sample) -> String<256> {
+    let mut payload = String::<256>::new();
+
+    write!(payload, "{{\"ts\":{}", sample.timestamp).ok();
+    sample.temperature.inspect(|value| {
+        write!(payload, ",\"temperature\":{}", value).ok();
+    });
+    sample.pressure.inspect(|value| {
+        write!(payload, ",\"pressure\":{}", value).ok();
+    });
+    sample.humidity.inspect(|value| {
+        write!(payload, ",\"humidity\":{}", value).ok();
+    });
+    sample.gas_ohm.inspect(|value| {
+        write!(payload, ",\"gas_ohm\":{}", value).ok();
+    });
+    sample.lux_bh1750.inspect(|value| {
+        write!(payload, ",\"lux_bh1750\":{}", value).ok();
+    });
+    sample.lux_veml7700.inspect(|value| {
+        write!(payload, ",\"lux_veml7700\":{}", value).ok();
+    });
+    sample.temp_bmp390.inspect(|value| {
+        write!(payload, ",\"temp_bmp390\":{}", value).ok();
+    });
+    sample.press_bmp390.inspect(|value| {
+        write!(payload, ",\"press_bmp390\":{}", value).ok();
+    });
+    sample.hum_sht40.inspect(|value| {
+        write!(payload, ",\"hum_sht40\":{}", value).ok();
+    });
+    sample.temp_sht40.inspect(|value| {
+        write!(payload, ",\"temp_sht40\":{}", value).ok();
+    });
+    sample.aiq_score.inspect(|value| {
+        write!(payload, ",\"aiq_score\":{}", value).ok();
+    });
+    write!(payload, "}}").ok();
+
+    payload
 }
