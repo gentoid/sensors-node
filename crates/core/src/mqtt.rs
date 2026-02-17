@@ -234,12 +234,12 @@ async fn publish_sample(
 fn handle_poll_result(poll_result: Result<Option<Event<'_>>, mqtt_client::Error>) -> bool {
     match poll_result {
         Ok(Some(event)) => match event {
-            Event::Connected => todo!(),
-            Event::Received(_publish) => todo!(),
-            Event::Subscribed => todo!(),
-            Event::SubscribeFailed => todo!(),
-            Event::Unsubscribed => todo!(),
-            Event::Published => todo!(),
+            Event::Connected => info!("MQTT: connected"),
+            Event::Received(msg) => info!("MQTT: message received: {:?}", msg),
+            Event::Subscribed => info!("MQTT: subscribed"),
+            Event::SubscribeFailed => warn!("MQTT: subscribe failed"),
+            Event::Unsubscribed => info!("MQTT: unsubscribed"),
+            Event::Published => info!("MQTT: published"),
             Event::Disconnected => {
                 warn!("MQTT: disconnected");
                 return false;
