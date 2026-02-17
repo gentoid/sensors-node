@@ -108,28 +108,12 @@ pub async fn task(stack: Stack<'static>, client_id: &'static str, topic: &'stati
                 Either3::Second(_) => {}
                 Either3::Third(poll) => match poll {
                     Ok(Some(event)) => {
-                        match event {
-                            Event::Disconnected => {
-                                warn!("MQTT: disconnected");
+                        match handle_event(&event) {
+                            EventResult::Nothing => {}
+                            EventResult::Disconnected => {
                                 DOWN.signal(());
                                 break;
                             }
-                            Event::Received(_) => {
-                                info!("MQTT: message received");
-                            }
-                            Event::Published => {
-                                info!("MQTT: published");
-                            }
-                            Event::Subscribed => {
-                                info!("MQTT: subscribed");
-                            }
-                            Event::SubscribeFailed => {
-                                warn!("MQTT: subscribe failed");
-                            }
-                            Event::Unsubscribed => {
-                                info!("MQTT: unsubscribed");
-                            }
-                            Event::Connected => {}
                         }
 
                         ticker.reset();
@@ -202,6 +186,38 @@ pub async fn task(stack: Stack<'static>, client_id: &'static str, topic: &'stati
 
         info!("MQTT disconnected, retrying...");
     }
+}
+
+enum EventResult {
+    Nothing,
+    Disconnected,
+}
+
+fn handle_event(event: &mqtt_client::Event) -> EventResult {
+    match event {
+        Event::Disconnected => {
+            warn!("MQTT: disconnected");
+            return EventResult::Disconnected;
+        }
+        Event::Received(_) => {
+            info!("MQTT: message received");
+        }
+        Event::Published => {
+            info!("MQTT: published");
+        }
+        Event::Subscribed => {
+            info!("MQTT: subscribed");
+        }
+        Event::SubscribeFailed => {
+            warn!("MQTT: subscribe failed");
+        }
+        Event::Unsubscribed => {
+            info!("MQTT: unsubscribed");
+        }
+        Event::Connected => {}
+    }
+
+    EventResult::Nothing
 }
 
 fn build_payload(sample: &sensors::Sample) -> String<256> {
