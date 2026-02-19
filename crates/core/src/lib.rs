@@ -15,10 +15,12 @@ pub mod system;
 pub mod web;
 pub mod wifi;
 
+#[derive(defmt::Format)]
 enum Error {
     CannotConvertPayload,
 }
 
+#[derive(defmt::Format)]
 pub(crate) enum Command {
     RebootToReconfigure,
 }
@@ -34,7 +36,7 @@ impl<'a> TryFrom<publish::Publish<'a>> for Command {
         let value = msg.payload.as_bytes()[0];
         
         match value {
-            0 => Ok(Self::RebootToReconfigure),
+            48 => Ok(Self::RebootToReconfigure), // ASCII zero
             _ => Err(Error::CannotConvertPayload)
         }
     }

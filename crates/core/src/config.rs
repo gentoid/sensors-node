@@ -126,14 +126,14 @@ pub async fn save_settings(
     kv_storage::write_string(&mut tx, MQTT_BROKER_KEY, &settings.mqtt_broker).await?;
     kv_storage::write_string(&mut tx, MQTT_CLIENT_ID_KEY, &settings.mqtt_client_id).await?;
     kv_storage::write_string(&mut tx, MQTT_TOPIC_KEY, &settings.mqtt_topic).await?;
-    kv_storage::write_string(&mut tx, WIFI_PASSWORD_KEY, &settings.wifi_password).await?;
-    kv_storage::write_string(&mut tx, WIFI_SSID_KEY, &settings.wifi_ssid).await?;
     kv_storage::write_bool(
         &mut tx,
         SYSTEM_REBOOT_TO_RECONFIGURE,
         settings.reboot_to_reconfigure,
     )
     .await?;
+    kv_storage::write_string(&mut tx, WIFI_PASSWORD_KEY, &settings.wifi_password).await?;
+    kv_storage::write_string(&mut tx, WIFI_SSID_KEY, &settings.wifi_ssid).await?;
 
     tx.commit().await?;
 

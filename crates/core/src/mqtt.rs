@@ -41,7 +41,7 @@ static PUBLISH_QUEUE: Channel<CriticalSectionRawMutex, sensors::Sample, PUBLISH_
 static SUBSCRIBE_QUEUE: Channel<CriticalSectionRawMutex, Command, SUBSCRIBE_QUEUE_SIZE> =
     Channel::new();
 
-static COMMANDS_TOPIC_BASE: &'static str = "sensors/command/";
+static COMMANDS_TOPIC_BASE: &'static str = "sensors/command";
 
 #[embassy_executor::task]
 pub async fn task(
