@@ -17,10 +17,6 @@ use embassy_futures::select;
 use embassy_net::{Runner, StackResources};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_time::Timer;
-use embedded_graphics::mono_font::{self, MonoTextStyleBuilder};
-use embedded_graphics::pixelcolor::BinaryColor;
-use embedded_graphics::prelude::Point;
-use embedded_graphics::{Drawable, text};
 use esp_hal::clock::CpuClock;
 use esp_hal::i2c;
 use esp_hal::peripherals::Peripherals;
@@ -36,16 +32,13 @@ use esp_radio::{
 use esp_rtos::main;
 use panic_rtt_target as _;
 use sensors_node_core::config::SettingsEnum;
-use sensors_node_core::sensors;
+use sensors_node_core::{display, sensors};
 use sensors_node_core::wifi::print_wifi_error;
 use sensors_node_core::{
     ble,
     config::{Settings, get_initial_settings},
     kv_storage, led, net_time, system, web,
 };
-use ssd1306::mode::DisplayConfig;
-use ssd1306::prelude::DisplayRotation;
-use ssd1306::size::DisplaySize128x32;
 use static_cell::StaticCell;
 
 extern crate alloc;
@@ -124,7 +117,7 @@ async fn main(spawner: Spawner) -> ! {
         static I2C_STATIC: StaticCell<RefCell<sensors::I2C>> = StaticCell::new();
         I2C_STATIC.init(RefCell::new(i2c))
     };
-    spawner.must_spawn(display_hello_world(&i2c));
+    spawner.must_spawn(display(&i2c));
 
     let radio_init =
         RADIO.init(esp_radio::init().expect("Failed to initialize Wi-Fi/BLE controller"));
@@ -198,36 +191,37 @@ async fn main(spawner: Spawner) -> ! {
 }
 
 #[embassy_executor::task]
-async fn display_hello_world(i2c: &'static RefCell<sensors::I2C<'static>>) {
-    let interface = ssd1306::I2CDisplayInterface::new(sensors::RefCellDevice::new(i2c));
-    let mut display = ssd1306::Ssd1306::new(interface, DisplaySize128x32, DisplayRotation::Rotate0)
-        .into_buffered_graphics_mode();
-    display.init().unwrap();
+async fn display(i2c: &'static RefCell<sensors::I2C<'static>>) {
+    display::run(i2c).await;
+    // let interface = ssd1306::I2CDisplayInterface::new(sensors::RefCellDevice::new(i2c));
+    // let mut display = ssd1306::Ssd1306::new(interface, DisplaySize128x32, DisplayRotation::Rotate0)
+    //     .into_buffered_graphics_mode();
+    // display.init().unwrap();
 
-    let text_style = MonoTextStyleBuilder::new()
-        .font(&mono_font::ascii::FONT_9X18_BOLD)
-        .text_color(BinaryColor::On)
-        .build();
+    // let text_style = MonoTextStyleBuilder::new()
+    //     .font(&mono_font::ascii::FONT_9X18_BOLD)
+    //     .text_color(BinaryColor::On)
+    //     .build();
 
-    text::Text::with_baseline(
-        "Hello world!",
-        Point::zero(),
-        text_style,
-        text::Baseline::Top,
-    )
-    .draw(&mut display)
-    .ok();
+    // text::Text::with_baseline(
+    //     "Hello world!",
+    //     Point::zero(),
+    //     text_style,
+    //     text::Baseline::Top,
+    // )
+    // .draw(&mut display)
+    // .ok();
 
-    text::Text::with_baseline(
-        "Hello Rust!",
-        Point::new(0, 16),
-        text_style,
-        text::Baseline::Top,
-    )
-    .draw(&mut display)
-    .ok();
+    // text::Text::with_baseline(
+    //     "Hello Rust!",
+    //     Point::new(0, 16),
+    //     text_style,
+    //     text::Baseline::Top,
+    // )
+    // .draw(&mut display)
+    // .ok();
 
-    display.flush().ok();
+    // display.flush().ok();
 }
 
 async fn run(

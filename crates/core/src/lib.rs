@@ -14,6 +14,8 @@ pub mod sensors;
 pub mod system;
 pub mod web;
 pub mod wifi;
+#[cfg(feature = "display")]
+pub mod display;
 
 #[derive(defmt::Format)]
 enum Error {

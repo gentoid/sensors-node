@@ -98,6 +98,11 @@ picoserve = { git = "https://github.com/sammhicks/picoserve.git", rev = "d68a535
     "embassy",
 ] }
 
+ssd1306 = { version = "0.10.0", optional = true }
+embedded-graphics = { version = "*", features = ["defmt"], optional = true}
+
 [features]
+default = ["display"]
 esp32s3 = ["esp-hal/esp32s3", "esp-radio/esp32s3", "esp-hal-smartled/esp32s3"]
 esp32c6 = ["esp-hal/esp32c6", "esp-radio/esp32c6", "esp-hal-smartled/esp32c6"]
+display = ["ssd1306", "embedded-graphics"]

@@ -13,17 +13,18 @@ use uom::si::{pressure::hectopascal, thermodynamic_temperature::degree_celsius};
 
 use crate::{air_quality, net_time};
 
+pub static LATEST_SAMPLE: Signal<CriticalSectionRawMutex, Sample> = Signal::new();
 pub static HAS_DATA: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 pub static QUEUE: mutex::Mutex<CriticalSectionRawMutex, Queue<Sample, 64>> =
     mutex::Mutex::new(Queue::new());
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize, Clone)]
 enum SampleVersion {
     #[default]
     V1,
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize, Clone)]
 pub struct Sample {
     version: SampleVersion,
     pub timestamp: u32,
@@ -41,7 +42,7 @@ pub struct Sample {
 }
 
 pub type I2C<'a> = i2c::master::I2c<'a, Async>;
-type RefCellDevI2C<'a> = RefCellDevice<'a, I2C<'a>>;
+pub type RefCellDevI2C<'a> = RefCellDevice<'a, I2C<'a>>;
 
 #[embassy_executor::task]
 pub async fn task(i2c: &'static RefCell<I2C<'static>>) -> ! {
@@ -159,8 +160,10 @@ pub async fn task(i2c: &'static RefCell<I2C<'static>>) -> ! {
 
         {
             let mut queue = QUEUE.lock().await;
-            queue.enqueue(sample).ok();
+            queue.enqueue(sample.clone()).ok();
         }
+
+        LATEST_SAMPLE.signal(sample);
         HAS_DATA.signal(());
 
         let delay = embassy_time::Duration::from_secs(60) - (Instant::now() - start);
