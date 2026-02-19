@@ -1,6 +1,6 @@
 use core::fmt::Write;
 use defmt::{Debug2Format, info, warn};
-use embassy_futures::join::join;
+use embassy_futures::join::join3;
 use embassy_futures::select;
 use embassy_net::tcp::TcpSocket;
 use embassy_net::{Stack, tcp};
@@ -11,40 +11,63 @@ use heapless::String;
 
 use mqtt_client::packet::QoS;
 use mqtt_client::time::EmbassyClock;
-use mqtt_client::{ConnectOptions, Event, PublishMsg};
+use mqtt_client::{ConnectOptions, Event, PublishMsg, SubscribeOptions};
+use static_cell::StaticCell;
 
-use crate::{sensors, wifi};
+use crate::{Command, sensors, wifi};
+
+extern crate alloc;
+
+type MqttClient<'c, 't> = mqtt_client::Client<'c, EmbassyClock, TcpSocket<'t>, 1, 4, 1, 4>;
 
 type SampleSender = Sender<'static, CriticalSectionRawMutex, sensors::Sample, PUBLISH_QUEUE_SIZE>;
 type SampleReceiver =
     Receiver<'static, CriticalSectionRawMutex, sensors::Sample, PUBLISH_QUEUE_SIZE>;
-type MqttClient<'c, 't> = mqtt_client::Client<'c, EmbassyClock, TcpSocket<'t>, 1, 4, 1, 4>;
+
+type CommandSender = Sender<'static, CriticalSectionRawMutex, Command, SUBSCRIBE_QUEUE_SIZE>;
+type CommandReceiver = Receiver<'static, CriticalSectionRawMutex, Command, SUBSCRIBE_QUEUE_SIZE>;
 
 pub static READY: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 pub static DOWN: Signal<CriticalSectionRawMutex, ()> = Signal::new();
 
 const PUBLISH_QUEUE_SIZE: usize = 8;
+const SUBSCRIBE_QUEUE_SIZE: usize = 8;
 const PUBLISH_BURST: usize = 4;
 const IO_POLL_TIMEOUT_MS: u64 = 6_000;
 const CONNECT_TIMEOUT_SECS: u64 = 10;
 
 static PUBLISH_QUEUE: Channel<CriticalSectionRawMutex, sensors::Sample, PUBLISH_QUEUE_SIZE> =
     Channel::new();
+static SUBSCRIBE_QUEUE: Channel<CriticalSectionRawMutex, Command, SUBSCRIBE_QUEUE_SIZE> =
+    Channel::new();
+
+static COMMANDS_TOPIC_BASE: &'static str = "sensors/command/";
 
 #[embassy_executor::task]
 pub async fn task(stack: Stack<'static>, client_id: &'static str, topic: &'static str) -> ! {
     info!("MQTT task started");
 
-    let sender = PUBLISH_QUEUE.sender();
-    let receiver = PUBLISH_QUEUE.receiver();
+    let publish_sender = PUBLISH_QUEUE.sender();
+    let publish_receiver = PUBLISH_QUEUE.receiver();
 
-    join(
-        publisher_loop(sender),
-        mqtt_loop(stack, client_id, topic, receiver),
+    let subscribe_sender = SUBSCRIBE_QUEUE.sender();
+    let subscribe_receiver = SUBSCRIBE_QUEUE.receiver();
+
+    join3(
+        publisher_loop(publish_sender),
+        command_execution_loop(subscribe_receiver),
+        mqtt_loop(stack, client_id, topic, publish_receiver, subscribe_sender),
     )
     .await;
 
     unreachable!()
+}
+async fn command_execution_loop(receiver: CommandReceiver) -> ! {
+    loop {
+        match receiver.receive().await {
+            Command::RebootToReconfigure => todo!(),
+        }
+    }
 }
 
 async fn publisher_loop(sender: SampleSender) -> ! {
@@ -63,11 +86,16 @@ async fn publisher_loop(sender: SampleSender) -> ! {
     }
 }
 
+fn command_topic(client_id: &str) -> alloc::string::String {
+    alloc::format!("{COMMANDS_TOPIC_BASE}/{client_id}")
+}
+
 async fn mqtt_loop(
     stack: Stack<'static>,
     client_id: &'static str,
     topic: &'static str,
-    receiver: SampleReceiver,
+    publish_receiver: SampleReceiver,
+    command_sender: CommandSender,
 ) -> ! {
     let broker_addr = smoltcp::wire::IpAddress::v4(192, 168, 1, 11);
     let broker_port = 1883;
@@ -133,6 +161,19 @@ async fn mqtt_loop(
         READY.signal(());
         backoff = 1;
 
+        let cmd_topic: &'static alloc::string::String = {
+            static CMD_TOPIC: StaticCell<alloc::string::String> = StaticCell::new();
+            CMD_TOPIC.init(command_topic(client_id))
+        };
+        let subscribe_options = SubscribeOptions {
+            qos: Some(QoS::AtMostOnce),
+            topic: &cmd_topic,
+        };
+
+        if let Err(err) = client.schedule_subscribe(subscribe_options) {
+            warn!("Error when subscribe scheduled: {:?}", err);
+        }
+
         'connected: loop {
             if let Err(err) = client.poll_timers() {
                 warn!("MQTT poll timers error: {:?}", Debug2Format(&err));
@@ -140,7 +181,12 @@ async fn mqtt_loop(
                 break;
             }
 
-            match select::select(receiver.receive(), poll_io_with_timeout(&mut client)).await {
+            match select::select(
+                publish_receiver.receive(),
+                poll_io_with_timeout(&mut client),
+            )
+            .await
+            {
                 select::Either::First(sample) => {
                     if !publish_sample(&mut client, topic, sample).await {
                         // @todo put sample back, or is it ok to drop it?
@@ -149,7 +195,7 @@ async fn mqtt_loop(
                     }
 
                     for _ in 0..PUBLISH_BURST {
-                        match receiver.try_receive() {
+                        match publish_receiver.try_receive() {
                             Ok(sample) => {
                                 if !publish_sample(&mut client, topic, sample).await {
                                     // @todo put sample back, or is it ok to drop it?
@@ -162,7 +208,7 @@ async fn mqtt_loop(
                     }
                 }
                 select::Either::Second(poll) => {
-                    if !handle_poll_result(poll) {
+                    if !handle_poll_result(client_id, poll, command_sender) {
                         DOWN.signal(());
                         break;
                     }
@@ -231,11 +277,27 @@ async fn publish_sample(
     true
 }
 
-fn handle_poll_result(poll_result: Result<Option<Event<'_>>, mqtt_client::Error>) -> bool {
+fn handle_poll_result(client_id: &str, poll_result: Result<Option<Event<'_>>, mqtt_client::Error>, sender: CommandSender) -> bool {
     match poll_result {
         Ok(Some(event)) => match event {
             Event::Connected => info!("MQTT: connected"),
-            Event::Received(msg) => info!("MQTT: message received: {:?}", msg),
+            Event::Received(msg) => {
+                info!("MQTT: message received: {:?}", msg);
+
+                let cmd_topic = command_topic(client_id);
+                if msg.topic.as_bytes() == cmd_topic.as_bytes() {
+                    match Command::try_from(msg) {
+                        Ok(command) => {
+                            if let Err(err) = sender.try_send(command) {
+                                warn!("Could not apply command: {:?}", err);
+                            }
+                        },
+                        Err(err) => warn!("Error while converting payload to Command: {:?}", err),
+                    }
+                } else {
+                    warn!("Unknown packet arrived: {:?}", msg);
+                }
+            }
             Event::Subscribed => info!("MQTT: subscribed"),
             Event::SubscribeFailed => warn!("MQTT: subscribe failed"),
             Event::Unsubscribed => info!("MQTT: unsubscribed"),
