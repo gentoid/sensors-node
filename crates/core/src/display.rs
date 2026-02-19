@@ -3,7 +3,6 @@ use core::cell::RefCell;
 use alloc::format; 
 use alloc::string::String; 
 use alloc::vec::Vec; 
-use defmt::info;
 use embedded_graphics::mono_font::{self, MonoTextStyleBuilder};
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::prelude::Point;
@@ -94,10 +93,7 @@ pub async fn run(i2c: &'static RefCell<sensors::I2C<'static>>) {
     display.flush();
 
     loop {
-        info!("[ Display ] waiting for a sample");
         let sample = sensors::LATEST_SAMPLE.wait().await;
-        info!("[ Display ] sample received");
-
         let mut values: Vec<String> = Vec::new();
 
         sample
