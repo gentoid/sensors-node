@@ -113,6 +113,11 @@ async fn mqtt_loop(
 
     let mut backoff = 1u64;
 
+    let cmd_topic: &'static alloc::string::String = {
+        static CMD_TOPIC: StaticCell<alloc::string::String> = StaticCell::new();
+        CMD_TOPIC.init(command_topic(client_id))
+    };
+
     loop {
         info!("MQTT: waiting for WiFi...");
         wifi::UP.wait().await;
@@ -171,10 +176,6 @@ async fn mqtt_loop(
         READY.signal(());
         backoff = 1;
 
-        let cmd_topic: &'static alloc::string::String = {
-            static CMD_TOPIC: StaticCell<alloc::string::String> = StaticCell::new();
-            CMD_TOPIC.init(command_topic(client_id))
-        };
         let subscribe_options = SubscribeOptions {
             qos: Some(QoS::AtMostOnce),
             topic: &cmd_topic,
