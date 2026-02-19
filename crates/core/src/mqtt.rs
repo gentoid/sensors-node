@@ -1,4 +1,5 @@
 use core::fmt::Write;
+use core::net::Ipv4Addr;
 use defmt::{Debug2Format, info, warn};
 use embassy_futures::join::join3;
 use embassy_futures::select;
@@ -47,6 +48,7 @@ static COMMANDS_TOPIC_BASE: &'static str = "sensors/command";
 pub async fn task(
     db: &'static kv_storage::Db,
     stack: Stack<'static>,
+    broker_addr: Ipv4Addr,
     client_id: &'static str,
     topic: &'static str,
 ) -> ! {
@@ -61,7 +63,7 @@ pub async fn task(
     join3(
         publisher_loop(publish_sender),
         command_execution_loop(db, subscribe_receiver),
-        mqtt_loop(stack, client_id, topic, publish_receiver, subscribe_sender),
+        mqtt_loop(stack, broker_addr, client_id, topic, publish_receiver, subscribe_sender),
     )
     .await;
 
@@ -102,12 +104,12 @@ fn command_topic(client_id: &str) -> alloc::string::String {
 
 async fn mqtt_loop(
     stack: Stack<'static>,
+    broker_addr: Ipv4Addr,
     client_id: &'static str,
     topic: &'static str,
     publish_receiver: SampleReceiver,
     command_sender: CommandSender,
 ) -> ! {
-    let broker_addr = smoltcp::wire::IpAddress::v4(192, 168, 1, 11);
     let broker_port = 1883;
     let keep_alive_secs: u16 = 120;
 

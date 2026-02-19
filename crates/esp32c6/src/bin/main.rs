@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![feature(addr_parse_ascii)]
 #![deny(
     clippy::mem_forget,
     reason = "mem::forget is generally not safe to do with esp_hal types, especially those \
@@ -10,7 +11,7 @@
 use core::cell::RefCell;
 use core::net::Ipv4Addr;
 
-use defmt::{error, info};
+use defmt::{error, info, warn};
 use edge_nal::UdpBind;
 use embassy_executor::Spawner;
 use embassy_futures::select;
@@ -31,14 +32,14 @@ use esp_radio::{
 };
 use esp_rtos::main;
 use panic_rtt_target as _;
-use sensors_node_core::config::SettingsEnum;
-use sensors_node_core::{display, sensors};
+use sensors_node_core::config::{self, SettingsEnum};
 use sensors_node_core::wifi::print_wifi_error;
 use sensors_node_core::{
     ble,
     config::{Settings, get_initial_settings},
     kv_storage, led, net_time, system, web,
 };
+use sensors_node_core::{display, sensors};
 use static_cell::StaticCell;
 
 extern crate alloc;
@@ -265,9 +266,19 @@ async fn run(
 
     spawner.must_spawn(net_time::sync_task(stack));
 
+    let broker_address = match Ipv4Addr::parse_ascii(settings.mqtt_broker.as_bytes()) {
+        Err(err) => {
+            warn!("Error parsing broker IP: {}", err);
+            config::set_reboot(db).await.unwrap();
+            unreachable!();
+        }
+        Ok(address) => address,
+    };
+
     spawner.must_spawn(sensors_node_core::mqtt::task(
         db,
         stack,
+        broker_address,
         settings.mqtt_client_id.as_str(),
         settings.mqtt_topic.as_str(),
     ));
