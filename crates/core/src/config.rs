@@ -139,3 +139,11 @@ pub async fn save_settings(
 
     Ok(())
 }
+
+pub async fn set_reboot(db: &'static kv_storage::Db) -> kv_storage::DbResult<()> {
+    let mut tx = db.write_transaction().await;
+    kv_storage::write_bool(&mut tx, SYSTEM_REBOOT_TO_RECONFIGURE, true).await?;
+    tx.commit().await?;
+
+    esp_hal::system::software_reset();
+}

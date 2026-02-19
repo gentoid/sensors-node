@@ -14,7 +14,7 @@ use mqtt_client::time::EmbassyClock;
 use mqtt_client::{ConnectOptions, Event, PublishMsg, SubscribeOptions};
 use static_cell::StaticCell;
 
-use crate::{Command, sensors, wifi};
+use crate::{Command, config, kv_storage, sensors, wifi};
 
 extern crate alloc;
 
@@ -44,7 +44,12 @@ static SUBSCRIBE_QUEUE: Channel<CriticalSectionRawMutex, Command, SUBSCRIBE_QUEU
 static COMMANDS_TOPIC_BASE: &'static str = "sensors/command/";
 
 #[embassy_executor::task]
-pub async fn task(stack: Stack<'static>, client_id: &'static str, topic: &'static str) -> ! {
+pub async fn task(
+    db: &'static kv_storage::Db,
+    stack: Stack<'static>,
+    client_id: &'static str,
+    topic: &'static str,
+) -> ! {
     info!("MQTT task started");
 
     let publish_sender = PUBLISH_QUEUE.sender();
@@ -55,17 +60,22 @@ pub async fn task(stack: Stack<'static>, client_id: &'static str, topic: &'stati
 
     join3(
         publisher_loop(publish_sender),
-        command_execution_loop(subscribe_receiver),
+        command_execution_loop(db, subscribe_receiver),
         mqtt_loop(stack, client_id, topic, publish_receiver, subscribe_sender),
     )
     .await;
 
     unreachable!()
 }
-async fn command_execution_loop(receiver: CommandReceiver) -> ! {
+async fn command_execution_loop(db: &'static kv_storage::Db, receiver: CommandReceiver) -> ! {
     loop {
         match receiver.receive().await {
-            Command::RebootToReconfigure => todo!(),
+            Command::RebootToReconfigure => {
+                info!("Reboot requested");
+                if let Err(err) = config::set_reboot(db).await {
+                    warn!("Could not set settings to reboot: {:?}", err);
+                };
+            }
         }
     }
 }
@@ -277,7 +287,11 @@ async fn publish_sample(
     true
 }
 
-fn handle_poll_result(client_id: &str, poll_result: Result<Option<Event<'_>>, mqtt_client::Error>, sender: CommandSender) -> bool {
+fn handle_poll_result(
+    client_id: &str,
+    poll_result: Result<Option<Event<'_>>, mqtt_client::Error>,
+    sender: CommandSender,
+) -> bool {
     match poll_result {
         Ok(Some(event)) => match event {
             Event::Connected => info!("MQTT: connected"),
@@ -291,7 +305,7 @@ fn handle_poll_result(client_id: &str, poll_result: Result<Option<Event<'_>>, mq
                             if let Err(err) = sender.try_send(command) {
                                 warn!("Could not apply command: {:?}", err);
                             }
-                        },
+                        }
                         Err(err) => warn!("Error while converting payload to Command: {:?}", err),
                     }
                 } else {

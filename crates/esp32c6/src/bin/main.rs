@@ -180,7 +180,15 @@ async fn main(spawner: Spawner) -> ! {
                     )
                     .await
                 } else {
-                    run(spawner, wifi_controller, interfaces.sta, &i2c, settings).await
+                    run(
+                        spawner,
+                        kv_db,
+                        wifi_controller,
+                        interfaces.sta,
+                        &i2c,
+                        settings,
+                    )
+                    .await
                 }
             }
         },
@@ -224,6 +232,7 @@ async fn display_hello_world(i2c: &'static RefCell<sensors::I2C<'static>>) {
 
 async fn run(
     spawner: Spawner,
+    db: &'static kv_storage::Db,
     wifi_controller: WifiController<'static>,
     device: WifiDevice<'static>,
     i2c: &'static RefCell<sensors::I2C<'static>>,
@@ -263,6 +272,7 @@ async fn run(
     spawner.must_spawn(net_time::sync_task(stack));
 
     spawner.must_spawn(sensors_node_core::mqtt::task(
+        db,
         stack,
         settings.mqtt_client_id.as_str(),
         settings.mqtt_topic.as_str(),
