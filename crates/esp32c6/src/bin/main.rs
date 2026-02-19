@@ -35,6 +35,7 @@ use esp_radio::{
 };
 use esp_rtos::main;
 use panic_rtt_target as _;
+use sensors_node_core::config::SettingsEnum;
 use sensors_node_core::sensors;
 use sensors_node_core::wifi::print_wifi_error;
 use sensors_node_core::{
@@ -148,21 +149,43 @@ async fn main(spawner: Spawner) -> ! {
     };
 
     match get_initial_settings(kv_db).await {
-        Ok(settings) => {
-            info!("###    WiFi SSID:        {}", settings.wifi_ssid);
-            info!("###    MQTT broker:      {}", settings.mqtt_broker);
-            info!("###    MQTT client id:   {}", settings.mqtt_client_id);
-            info!("###    MQTT topic:       {}", settings.mqtt_topic);
-            
-            // init_start(spawner, wifi_controller, interfaces.ap, kv_db, settings).await
+        Ok(settings) => match settings {
+            SettingsEnum::Optional(settings) => {
+                init_start(
+                    spawner,
+                    wifi_controller,
+                    interfaces.ap,
+                    kv_db,
+                    SettingsEnum::Optional(settings),
+                )
+                .await
+            }
+            SettingsEnum::FilledIn(settings) => {
+                info!("###    WiFi SSID:        {}", settings.wifi_ssid);
+                info!("###    MQTT broker:      {}", settings.mqtt_broker);
+                info!("###    MQTT client id:   {}", settings.mqtt_client_id);
+                info!("###    MQTT topic:       {}", settings.mqtt_topic);
+                info!(
+                    "###    Reconfigure:      {:?}",
+                    settings.reboot_to_reconfigure
+                );
 
-            run(spawner, wifi_controller, interfaces.sta, &i2c, settings).await
-        }
-        Err(err) => {
-            info!("Could not get initial settings: {}", err);
-            unreachable!();
-            // init_start(spawner, wifi_controller, interfaces.ap, kv_db).await
-        }
+                if settings.reboot_to_reconfigure {
+                    init_start(
+                        spawner,
+                        wifi_controller,
+                        interfaces.ap,
+                        kv_db,
+                        SettingsEnum::FilledIn(settings),
+                    )
+                    .await
+                } else {
+                    run(spawner, wifi_controller, interfaces.sta, &i2c, settings).await
+                }
+            }
+        },
+
+        Err(err) => panic!("Could not get initial settings: {:?}", err),
     }
 }
 
@@ -259,12 +282,12 @@ async fn init_start(
     mut wifi_controller: WifiController<'static>,
     device: WifiDevice<'static>,
     kv_db: &'static kv_storage::Db,
-    settings: Settings,
+    settings: SettingsEnum,
 ) -> ! {
     info!("Starting up web-server");
     let web_app = {
         static WEB_APP_STATIC: StaticCell<web::WebApp> = StaticCell::new();
-        WEB_APP_STATIC.init(web::WebApp::new(kv_db, Some(settings)))
+        WEB_APP_STATIC.init(web::WebApp::new(kv_db, settings))
     };
 
     let net_config = embassy_net::Config::ipv4_static(embassy_net::StaticConfigV4 {

@@ -22,12 +22,10 @@ pub struct EspFlash<T: NorFlash + ReadNorFlash> {
     flash_start: usize,
 }
 
-impl <T: NorFlash + ReadNorFlash> EspFlash<T> {
-
-fn page_addr(&self, page_id: ekv::flash::PageID) -> usize {
-    self.flash_start + page_id.index() * ekv::config::PAGE_SIZE
-}
-
+impl<T: NorFlash + ReadNorFlash> EspFlash<T> {
+    fn page_addr(&self, page_id: ekv::flash::PageID) -> usize {
+        self.flash_start + page_id.index() * ekv::config::PAGE_SIZE
+    }
 }
 
 impl<T: NorFlash + ReadNorFlash> ekv::flash::Flash for EspFlash<T> {
@@ -206,7 +204,10 @@ impl From<heapless::CapacityError> for DbError {
 //     }
 // }
 
-pub async fn init(flash: esp_hal::peripherals::FLASH<'static>, flash_start: usize) -> DbResult<&'static mut Db> {
+pub async fn init(
+    flash: esp_hal::peripherals::FLASH<'static>,
+    flash_start: usize,
+) -> DbResult<&'static mut Db> {
     info!("Initializing DB...");
 
     let flash = EspFlash {
@@ -223,20 +224,48 @@ pub async fn init(flash: esp_hal::peripherals::FLASH<'static>, flash_start: usiz
     Ok(db)
 }
 
+async fn read_from_db<'a>(
+    tx: &'a mut ReadTx,
+    key: &str,
+    buf: &mut [u8],
+) -> DbResult<Option<usize>> {
+    match tx.read(key.as_bytes(), buf).await {
+        Ok(length) => Ok(Some(length)),
+        Err(ekv::ReadError::KeyNotFound) => Ok(None),
+        Err(err) => Err(err.into()),
+    }
+}
+
+pub async fn read_bool<'a>(tx: &'a mut ReadTx, key: &str) -> DbResult<Option<bool>> {
+    let mut buf = [0u8; 1];
+    Ok(read_from_db(tx, key, &mut buf).await?.map(|_| buf[0] != 0))
+}
+
 pub async fn read_string<'a, const N: usize>(
     tx: &'a mut ReadTx,
     key: &str,
-) -> DbResult<String<N>> {
+) -> DbResult<Option<String<N>>> {
     let mut buf = [0u8; N];
-    let length = tx.read(key.as_bytes(), &mut buf).await?;
-
-    let value = core::str::from_utf8(&buf[..length])?;
-    let value = String::from_str(value)?;
-
-    Ok(value)
+    Ok(match read_from_db(tx, key, &mut buf).await? {
+        Some(length) => {
+            let value = core::str::from_utf8(&buf[..length])?;
+            Some(String::from_str(value)?)
+        }
+        None => None,
+    })
 }
 
-pub async fn write_string<const N: usize>(tx: &mut WriteTx, key: &str, value: &String<N>) -> DbResult<()> {
+pub async fn write_bool(tx: &mut WriteTx, key: &str, value: bool) -> DbResult<()> {
+    let value = if value { [1u8] } else { [0u8] };
+    tx.write(key.as_bytes(), &value).await?;
+    Ok(())
+}
+
+pub async fn write_string<const N: usize>(
+    tx: &mut WriteTx,
+    key: &str,
+    value: &String<N>,
+) -> DbResult<()> {
     tx.write(key.as_bytes(), value.as_bytes()).await?;
 
     Ok(())

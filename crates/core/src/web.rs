@@ -4,7 +4,7 @@ use embassy_net::Stack;
 use picoserve::{AppBuilder, AppRouter, extract::Form, response::File};
 use static_cell::StaticCell;
 
-use crate::{config::Settings, kv_storage};
+use crate::{config::SettingsEnum, kv_storage};
 
 extern crate alloc;
 
@@ -13,11 +13,11 @@ static INDEX_PAGE: StaticCell<alloc::string::String> = StaticCell::new();
 
 pub struct App {
     pub db: &'static kv_storage::Db,
-    settings: Option<Settings>,
+    settings: SettingsEnum,
 }
 
 impl App {
-    pub fn new(db: &'static kv_storage::Db, settings: Option<Settings>) -> Self {
+    pub fn new(db: &'static kv_storage::Db, settings: SettingsEnum) -> Self {
         Self { db, settings }
     }
 }
@@ -28,8 +28,7 @@ impl picoserve::AppBuilder for App {
     fn build_app(self) -> picoserve::Router<Self::PathRouter> {
         let db = self.db;
         let template = include_str!("../../../html/index.html");
-        let default_settings = Settings::default();
-        let settings = self.settings.as_ref().unwrap_or(&default_settings);
+        let settings = self.settings.to_filled_in_with_default();
 
         let index_page = template
             .replace("%_wifi_ssid_%", &settings.wifi_ssid)
@@ -54,7 +53,6 @@ impl picoserve::AppBuilder for App {
                             Ok(_) => {
                                 defmt::info!("Saved!");
                                 crate::system::NEED_REBOOT.store(true, Ordering::SeqCst);
-                                // Redirect::to("/")
                             }
                         }
                     },
@@ -69,7 +67,7 @@ pub struct WebApp {
 }
 
 impl WebApp {
-    pub fn new(db: &'static kv_storage::Db, settings: Option<Settings>) -> Self {
+    pub fn new(db: &'static kv_storage::Db, settings: SettingsEnum) -> Self {
         let router = picoserve::make_static!(AppRouter<App>, App::new(db, settings).build_app());
 
         let config = picoserve::make_static!(
