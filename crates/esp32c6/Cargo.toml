@@ -56,14 +56,11 @@ esp-radio = { version = "0.17.0", features = [
 trouble-host = { version = "0.5.1", default-features = false, features = [] }
 
 embassy-sync = { version = "0.7.2", features = ["defmt"] }
-sensors_node_core = { path = "../core/", features = ["esp32c6"] }
+sensors_node_core = { path = "../core/", features = ["esp32c6", "display"] }
 
 smart-leds = { version = "0.4.0" }
 esp-hal-smartled = { version = "0.17.0", features = ["defmt", "esp32c6"] }
-embassy-futures = { version = "0.1.2", features = ["defmt"] }
 heapless-08 = { version = "0.8.0", package = "heapless" }
-# leasehund = { version = "0.2.0" }
-# embassy-net-07 = { version = "0.7", package = "embassy-net" }
 edge-nal-embassy = { version = "0.8.1", default-features = false, features = [
   "proto-ipv4",
   "udp",

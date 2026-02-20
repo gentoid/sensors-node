@@ -74,7 +74,7 @@ embassy-sync-06 = { package = "embassy-sync", version = "0.6.0", features = [
 ] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 postcard = { version = "1.1", features = ["defmt", "use-defmt"] }
-esp-storage = { version = "0.8.0", features = ["defmt", "esp32c6"] }
+esp-storage = { version = "0.8.0", features = ["defmt"] }
 veml7700 = { version = "*" }
 sht4x = { version = "*", features = ["defmt"] }
 bmp390 = { version = "0.4.1", default-features = false, features = [
@@ -104,7 +104,7 @@ ssd1306 = { version = "0.10.0", optional = true }
 embedded-graphics = { version = "*", features = ["defmt"], optional = true }
 
 [features]
-default = ["display"]
-esp32s3 = ["esp-hal/esp32s3", "esp-radio/esp32s3", "esp-hal-smartled/esp32s3"]
-esp32c6 = ["esp-hal/esp32c6", "esp-radio/esp32c6", "esp-hal-smartled/esp32c6"]
+default = []
+esp32s3 = ["esp-hal/esp32s3", "esp-radio/esp32s3", "esp-hal-smartled/esp32s3", "esp-storage/esp32s3"]
+esp32c6 = ["esp-hal/esp32c6", "esp-radio/esp32c6", "esp-hal-smartled/esp32c6", "esp-storage/esp32c6"]
 display = ["ssd1306", "embedded-graphics"]

@@ -182,35 +182,6 @@ async fn main(spawner: Spawner) -> ! {
 #[embassy_executor::task]
 async fn display(i2c: &'static RefCell<sensors::I2C<'static>>) {
     display::run(i2c).await;
-    // let interface = ssd1306::I2CDisplayInterface::new(sensors::RefCellDevice::new(i2c));
-    // let mut display = ssd1306::Ssd1306::new(interface, DisplaySize128x32, DisplayRotation::Rotate0)
-    //     .into_buffered_graphics_mode();
-    // display.init().unwrap();
-
-    // let text_style = MonoTextStyleBuilder::new()
-    //     .font(&mono_font::ascii::FONT_9X18_BOLD)
-    //     .text_color(BinaryColor::On)
-    //     .build();
-
-    // text::Text::with_baseline(
-    //     "Hello world!",
-    //     Point::zero(),
-    //     text_style,
-    //     text::Baseline::Top,
-    // )
-    // .draw(&mut display)
-    // .ok();
-
-    // text::Text::with_baseline(
-    //     "Hello Rust!",
-    //     Point::new(0, 16),
-    //     text_style,
-    //     text::Baseline::Top,
-    // )
-    // .draw(&mut display)
-    // .ok();
-
-    // display.flush().ok();
 }
 
 async fn run(
@@ -287,19 +258,11 @@ async fn init_start(
     kv_db: &'static kv_storage::Db,
     settings: SettingsEnum,
 ) -> ! {
-    info!("Starting up web-server");
-    let web_app = {
-        static WEB_APP_STATIC: StaticCell<web::WebApp> = StaticCell::new();
-        WEB_APP_STATIC.init(web::WebApp::new(kv_db, settings))
-    };
-
     let net_config = embassy_net::Config::ipv4_static(embassy_net::StaticConfigV4 {
         address: embassy_net::Ipv4Cidr::new(Ipv4Addr::new(192, 168, 1, 1), 24),
         dns_servers: heapless_08::Vec::new(),
         gateway: None,
     });
-
-    // let net_config = embassy_net::Config::dhcpv4(DhcpConfig::default());
 
     let ap_config = AccessPointConfig::default().with_ssid("esp32-setup".into());
 
@@ -335,6 +298,12 @@ async fn init_start(
     info!("  IPv4 config: {:?}", stack.config_v4());
 
     spawner.must_spawn(system::reboot_on_request());
+
+    info!("Starting up web-server");
+    let web_app = {
+        static WEB_APP_STATIC: StaticCell<web::WebApp> = StaticCell::new();
+        WEB_APP_STATIC.init(web::WebApp::new(kv_db, settings))
+    };
 
     for task_id in 0..web::WEB_TASK_POOL_SIZE {
         spawner.must_spawn(web::task(task_id, stack, web_app.router, web_app.config));
