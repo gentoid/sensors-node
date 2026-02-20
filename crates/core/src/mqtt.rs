@@ -338,17 +338,14 @@ fn build_payload(sample: &sensors::Sample) -> String<256> {
     let mut payload = String::<256>::new();
 
     write!(payload, "{{\"ts\":{}", sample.timestamp).ok();
-    sample.temperature.inspect(|value| {
-        write!(payload, ",\"temperature\":{}", value).ok();
+    sample.temp_bme680.inspect(|value| {
+        write!(payload, ",\"temp_bme680\":{}", value).ok();
     });
-    sample.pressure.inspect(|value| {
-        write!(payload, ",\"pressure\":{}", value).ok();
+    sample.press_bme680.inspect(|value| {
+        write!(payload, ",\"press_bme680\":{}", value).ok();
     });
-    sample.humidity.inspect(|value| {
-        write!(payload, ",\"humidity\":{}", value).ok();
-    });
-    sample.gas_ohm.inspect(|value| {
-        write!(payload, ",\"gas_ohm\":{}", value).ok();
+    sample.hum_bme680.inspect(|value| {
+        write!(payload, ",\"hum_bme680\":{}", value).ok();
     });
     sample.lux_bh1750.inspect(|value| {
         write!(payload, ",\"lux_bh1750\":{}", value).ok();
@@ -367,9 +364,6 @@ fn build_payload(sample: &sensors::Sample) -> String<256> {
     });
     sample.temp_sht40.inspect(|value| {
         write!(payload, ",\"temp_sht40\":{}", value).ok();
-    });
-    sample.aiq_score.inspect(|value| {
-        write!(payload, ",\"aiq_score\":{}", value).ok();
     });
     write!(payload, "}}").ok();
 

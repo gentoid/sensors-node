@@ -28,17 +28,15 @@ enum SampleVersion {
 pub struct Sample {
     version: SampleVersion,
     pub timestamp: u32,
-    pub temperature: Option<f32>,
-    pub pressure: Option<f32>,
-    pub humidity: Option<f32>,
+    pub temp_bme680: Option<f32>,
+    pub press_bme680: Option<f32>,
+    pub hum_bme680: Option<f32>,
     pub hum_sht40: Option<f32>,
     pub temp_sht40: Option<f32>,
     pub press_bmp390: Option<f32>,
     pub temp_bmp390: Option<f32>,
-    pub gas_ohm: Option<u32>,
     pub lux_veml7700: Option<f32>,
     pub lux_bh1750: Option<f32>,
-    pub aiq_score: Option<u32>,
 }
 
 pub type I2C<'a> = i2c::master::I2c<'a, Async>;
@@ -87,15 +85,13 @@ pub async fn task(i2c: &'static RefCell<I2C<'static>>) -> ! {
         });
 
         let bme680_data = bme680.as_mut().and_then(|(bme, delayer)| {
-            // bme.set_sensor_mode(&mut delayer, PowerMode::ForcedMode)
-            //     .ok()?;
+            bme.set_sensor_mode(delayer, PowerMode::ForcedMode).ok()?;
             let (data, _state) = bme.get_sensor_data(delayer).ok()?;
 
             Some((
                 data.humidity_percent(),
                 data.pressure_hpa(),
                 data.temperature_celsius(),
-                data.gas_resistance_ohm(),
             ))
         });
 
@@ -129,13 +125,9 @@ pub async fn task(i2c: &'static RefCell<I2C<'static>>) -> ! {
         };
 
         bme680_data.map(|data| {
-            let (aiq_score, _) = air_quality::calculate(data.0, data.3);
-
-            sample.humidity = Some(data.0);
-            sample.pressure = Some(data.1);
-            sample.temperature = Some(data.2);
-            sample.aiq_score = Some(aiq_score);
-            sample.gas_ohm = Some(data.3);
+            sample.hum_bme680 = Some(data.0);
+            sample.press_bme680 = Some(data.1);
+            sample.temp_bme680 = Some(data.2);
         });
 
         sht40_data.map(|data| {
@@ -206,8 +198,6 @@ fn create_bme680<'a>(
         .with_pressure_oversampling(bme680::OversamplingSetting::OS4x)
         .with_humidity_oversampling(bme680::OversamplingSetting::OS2x)
         .with_temperature_filter(IIRFilterSize::Size3)
-        .with_gas_measurement(core::time::Duration::from_millis(150), 320, 21)
-        .with_run_gas(true)
         .build();
 
     bme.set_sensor_settings(&mut delayer, settings).ok()?;
