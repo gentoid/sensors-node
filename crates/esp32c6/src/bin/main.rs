@@ -11,8 +11,7 @@
 use core::cell::RefCell;
 use core::net::Ipv4Addr;
 
-use defmt::{error, info, warn};
-use edge_nal::UdpBind;
+use defmt::{info, warn};
 use embassy_executor::Spawner;
 use embassy_net::{Runner, StackResources};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
@@ -38,7 +37,7 @@ use sensors_node_core::{
     config::{Settings, get_initial_settings},
     kv_storage, led, net_time, system, web,
 };
-use sensors_node_core::{display, sensors};
+use sensors_node_core::{dhcp, display, sensors};
 use static_cell::StaticCell;
 
 extern crate alloc;
@@ -351,34 +350,6 @@ async fn init_start(
 async fn dhcp_task(stack: embassy_net::Stack<'static>) -> ! {
     let buffers = edge_nal_embassy::UdpBuffers::<2, 1024, 1024, 8>::new();
     let unbound_socket = edge_nal_embassy::Udp::new(stack, &buffers);
-    let mut bound_socket = loop {
-        match unbound_socket
-            .bind(core::net::SocketAddr::V4(core::net::SocketAddrV4::new(
-                Ipv4Addr::UNSPECIFIED,
-                edge_dhcp::io::DEFAULT_SERVER_PORT,
-            )))
-            .await
-        {
-            Ok(sock) => break sock,
-            Err(_) => {
-                error!("DHCP server: failed to bind socket");
-                Timer::after_secs(5).await;
-                continue;
-            }
-        };
-    };
 
-    let server_ip = Ipv4Addr::new(192, 168, 1, 1);
-
-    let mut server = edge_dhcp::server::Server::<_, 8>::new_with_et(server_ip);
-    let mut gw_buf = [Ipv4Addr::UNSPECIFIED];
-    let options = edge_dhcp::server::ServerOptions::new(server_ip, Some(&mut gw_buf));
-    let mut buf = [0u8; 1024];
-
-    loop {
-        info!("Starting DHCP server");
-        let _ =
-            edge_dhcp::io::server::run(&mut server, &options, &mut bound_socket, &mut buf).await;
-        Timer::after_secs(5).await;
-    }
+    dhcp::run(unbound_socket).await
 }

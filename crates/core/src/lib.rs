@@ -6,6 +6,9 @@ use mqtt_client::packet::publish;
 pub mod air_quality;
 pub mod ble;
 pub mod config;
+pub mod dhcp;
+#[cfg(feature = "display")]
+pub mod display;
 pub mod kv_storage;
 pub mod led;
 pub mod mqtt;
@@ -14,8 +17,6 @@ pub mod sensors;
 pub mod system;
 pub mod web;
 pub mod wifi;
-#[cfg(feature = "display")]
-pub mod display;
 
 #[derive(defmt::Format)]
 enum Error {
@@ -29,17 +30,17 @@ pub(crate) enum Command {
 
 impl<'a> TryFrom<publish::Publish<'a>> for Command {
     type Error = Error;
-    
+
     fn try_from(msg: publish::Publish<'a>) -> Result<Self, Self::Error> {
         if msg.payload.len() != 1 {
             return Err(Error::CannotConvertPayload);
         }
 
         let value = msg.payload.as_bytes()[0];
-        
+
         match value {
             48 => Ok(Self::RebootToReconfigure), // ASCII zero
-            _ => Err(Error::CannotConvertPayload)
+            _ => Err(Error::CannotConvertPayload),
         }
     }
 }

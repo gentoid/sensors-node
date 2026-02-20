@@ -97,9 +97,11 @@ picoserve = { git = "https://github.com/sammhicks/picoserve.git", rev = "d68a535
     "defmt",
     "embassy",
 ] }
+edge-dhcp = { version = "0.7.0" }
+edge-nal = { version = "0.6.0" }
 
 ssd1306 = { version = "0.10.0", optional = true }
-embedded-graphics = { version = "*", features = ["defmt"], optional = true}
+embedded-graphics = { version = "*", features = ["defmt"], optional = true }
 
 [features]
 default = ["display"]
