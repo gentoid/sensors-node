@@ -14,7 +14,6 @@ use core::net::Ipv4Addr;
 use defmt::{error, info, warn};
 use edge_nal::UdpBind;
 use embassy_executor::Spawner;
-use embassy_futures::select;
 use embassy_net::{Runner, StackResources};
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
 use embassy_time::Timer;
@@ -62,20 +61,10 @@ pub async fn led_task() -> ! {
     let mut led_buf = smart_led_buffer!(1);
     let peripherals = unsafe { Peripherals::steal() };
 
-    let mut led = {
-        let rmt = Rmt::new(peripherals.RMT, Rate::from_mhz(80)).unwrap();
-        let led = SmartLedsAdapter::new(rmt.channel0, peripherals.GPIO8, &mut led_buf);
-        sensors_node_core::led::Status::new(led)
-    };
+    let rmt = Rmt::new(peripherals.RMT, Rate::from_mhz(80)).unwrap();
+    let led = SmartLedsAdapter::new(rmt.channel0, peripherals.GPIO8, &mut led_buf);
 
-    let mut state = system::State::default();
-
-    loop {
-        match select::select(system::STATE.wait(), led::pattern(&mut led, &state)).await {
-            select::Either::First(new_state) => state = new_state,
-            select::Either::Second(_) => {}
-        }
-    }
+    led::run(led).await
 }
 
 #[allow(

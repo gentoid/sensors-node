@@ -1,3 +1,4 @@
+use embassy_futures::select;
 use embassy_time::Timer;
 use esp_hal_smartled::SmartLedsAdapter;
 use rgb::Grb;
@@ -40,6 +41,19 @@ where
         let rgb = hsv2rgb(hsv);
         let rgb = brightness(gamma([rgb].into_iter()), self.brightness);
         self.led.write(rgb).ok();
+    }
+}
+
+pub async fn run<'ch, const BUFFER_SIZE: usize>(led: SmartLedsAdapter<'ch, BUFFER_SIZE>) -> ! {
+    let mut led = Status::new(led);
+
+    let mut state = system::State::default();
+
+    loop {
+        match select::select(system::STATE.wait(), pattern(&mut led, &state)).await {
+            select::Either::First(new_state) => state = new_state,
+            select::Either::Second(_) => {}
+        }
     }
 }
 
