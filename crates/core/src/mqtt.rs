@@ -42,7 +42,7 @@ static PUBLISH_QUEUE: Channel<CriticalSectionRawMutex, sensors::Sample, PUBLISH_
 static SUBSCRIBE_QUEUE: Channel<CriticalSectionRawMutex, Command, SUBSCRIBE_QUEUE_SIZE> =
     Channel::new();
 
-static COMMANDS_TOPIC_BASE: &'static str = "sensors/command";
+static COMMANDS_TOPIC_BASE: &'static str = "broker/command";
 
 #[embassy_executor::task]
 pub async fn task(
@@ -130,6 +130,8 @@ async fn mqtt_loop(
         let mut tcp_socket = tcp::TcpSocket::new(stack, &mut rx_buf, &mut tx_buf);
 
         tcp_socket.set_timeout(None);
+
+        info!("MQTT: connecting to {}", broker_addr);
 
         if let Err(err) = tcp_socket.connect((broker_addr, broker_port)).await {
             warn!("MQTT: TCP connect failed: {}", err);
